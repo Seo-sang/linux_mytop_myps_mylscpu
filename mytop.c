@@ -29,6 +29,8 @@ double swaptotal, swapfree, swapused, swapavail_mem;
 
 int start_row = 0, start_col = 0;
 
+int option;
+
 typedef struct {
 	unsigned long PID;
 	char USER[MAX];
@@ -52,22 +54,52 @@ char result[MAX][MAX];
 void print();
 void get_data();
 void sort_by_cpu();
+void sort_by_time();
+void sort_by_mem();
 
-int get_value(const char* str) { //string으로부터 정수값을 얻는 함수
-	int ret = 0;
+long long get_value(const char* str) { //string으로부터 정수값을 얻는 함수
+	long long ret = 0;
 	for(int i = 0; i < MAX; i++) {
 		if(isdigit(str[i])) { //숫자일 경우 10을 곱하고 더한다.
-			ret = ret*10 + (str[i] - '0');
+			ret = ret*10 + ((long long)str[i] - '0');
 		}
 	}
 
 	return ret;
 }
+/*
+long long get_ll_value(const char* str) {
+	long long ret = 0;
+	for(int i = 0; i < MAX; i++) {
+		if(isdigit(str[i])) {
+			ret = ret * 10 + (str[i] - '0');
+		}
+	}
+
+	return ret;
+}
+*/
 
 void handler(int signo) { //SIGALRM 핸들러 함수
+	memset(result, 0, sizeof(result));
+	memset(procs, 0, sizeof(procs));
 	get_data();
+	if(option == 'P')
+		sort_by_cpu();
+	else if(option == 'T')
+		sort_by_time();
+	else if(option == 'M')
+		sort_by_mem();
+
 	print();
 	alarm(3);
+}
+
+void swap(proc *a, proc *b) {
+	proc tmp;
+	memcpy(&tmp, a, sizeof(proc));
+	memcpy(a, b, sizeof(proc));
+	memcpy(b, &tmp, sizeof(proc));
 }
 
 int get_user() { //USER의 수를 구하는 함수
@@ -169,7 +201,7 @@ void get_cpu_info() { //proc/stat으로부터 cpu정보를 받는 함
 	st = (double)(tmp_st *100) / total;
 }
 
-void get_mem_info() {
+void get_mem_info() {//proc/meminfo로부터 정보를 얻는 함수
 	int fd;
 
 	if((fd = open("/proc/meminfo", O_RDONLY)) < 0) { //proc/meminfo 파일 열기
@@ -189,7 +221,7 @@ void get_mem_info() {
 	memset(mem, 0, sizeof(mem));
 	int i = 0;
 	char *ptr = strtok(mem_tmp, "\n"); //읽은 정보 파싱
-	while(ptr != NULL) {수
+	while(ptr != NULL) {
 		strcpy(mem[i++], ptr);
 		ptr = strtok(NULL, "\n"); //개행으로 정보 파싱
 	}
@@ -217,7 +249,7 @@ void get_mem_info() {
 	
 }
 
-void get_proc_stat(char* proc_stat_path, int index) {
+void get_proc_stat(char* proc_stat_path, int index) { //proc/pid/stat에서 정보를 얻는 함
 	int fd;
 	char stat_tmp[MAX];
 	memset(stat_tmp, 0, MAX);
@@ -233,6 +265,7 @@ void get_proc_stat(char* proc_stat_path, int index) {
 
 	char *ptr = strtok(stat_tmp, " "); //공백을 기준으로 stat 정보 자르기
 	int i = 0;
+
 	char stats[MAX][MAX];
 	memset(stats, 0, sizeof(stats));
 	while(ptr != NULL) { //공백을 기준으로 stat 정보 자르기
@@ -259,29 +292,39 @@ void get_proc_stat(char* proc_stat_path, int index) {
 
 	struct stat statbuf; //process stat구조체
 	stat(proc_stat_path, &statbuf); //해당 stat 읽기
-	struct passwd *upasswd = getpwuid(statbuf.st_uid); //uid읽어오기
-	strcpy(procs[index].USER, upasswd->pw_name);
+	struct passwd *upasswd = getpwuid(statbuf.st_uid); //uid읽어오기수
+	for(int i = 0; i < 7; i++) {
+		if(upasswd->pw_name[i] != '\0') {
+			procs[index].USER[i] = upasswd->pw_name[i];
+		}
+		else {
+			break;
+		}
+	}
+	if(upasswd->pw_name[7] != '\0') procs[index].USER[7] = '+';
 	strncpy(procs[index].PR, stats[17], 3); //PR저장
 	procs[index].NI = atoi(stats[18]); //NI저장
 
-	int utime = atoi(stats[13]);
-	int stime = atoi(stats[14]);
+	long long utime = atoll(stats[13]);
+	long long stime = atoll(stats[14]);
 	int startTime = atoi(stats[21]);
 	long long uptime = get_uptime();
 	int hertz = (int)sysconf(_SC_CLK_TCK);
-
-	procs[index].CPU = ((double)(utime+stime) / hertz) / (uptime - ((double)startTime / hertz)) * 100; //%CPU저장
+	double tic = (double)(utime + stime) / hertz;
+	procs[index].CPU = (double)tic / uptime * 100;
 	procs[index].TIME = (double)(utime + stime) / ((double)hertz / 100);
 	
 	//COMMAND저장
 	i = 0;
+	if(procs[index].PID == 1614)
+		printf("%s\n", procs[index].COMMAND);
 	while(stats[1][i+1] != ')') {
 		procs[index].COMMAND[i] = stats[1][i+1];
 		i++;
 	}
 }
 
-void get_proc_status(const char* proc_status_path, int index) {
+void get_proc_status(const char* proc_status_path, int index) { //proc/pid/status에서 정보를 얻는 함
 	int fd;
 	char status_tmp[MAX];
 	if((fd = open(proc_status_path, O_RDONLY)) < 0) {//proc/pid/status 파일 열기
@@ -305,7 +348,7 @@ void get_proc_status(const char* proc_status_path, int index) {
 	procs[index].VIRT = get_value(status[17]); //VIRT값 str -> integer로 변환
 	procs[index].RES = get_value(status[20]); //RES값 str -> integer로 변환
 	procs[index].SHR = get_value(status[23]); //SHR값 str -> integer로 변환
-	procs[index].MEM = (double)procs[index].RES / (memtotal *1024);
+	procs[index].MEM = (double)procs[index].RES / (memtotal * 1024) * 100;
 }
 
 
@@ -320,11 +363,13 @@ void get_procs() { //pid를 확인하고 process 정보들을 가져오는 함�
 	while((dp = readdir(proc_dir)) != NULL) { //하위 파일들을 하나씩 읽는다.
 		if(isdigit(dp->d_name[0])) { //만약 폴더가 숫자로 시작하는 경우(process폴더인 경우)
 			procs[tasks].PID = atoi(dp->d_name);
+			//printf("%s\n", dp->d_name);
 			tasks++;
 		}
 	}
-	char proc_stat_path[MAX]; //prod/pid/stat
-	char proc_status_path[MAX]; //proc/pid/status
+	
+	char proc_stat_path[MAX]; //prod/pid/sta t경로
+	char proc_status_path[MAX]; //proc/pid/status 경로
 	for(int i = 0; i < tasks; i++) {
 		memset(proc_stat_path, 0, MAX);
 		memset(proc_status_path, 0, MAX);
@@ -334,6 +379,51 @@ void get_procs() { //pid를 확인하고 process 정보들을 가져오는 함�
 		get_proc_status(proc_status_path, i); //proc/pid/status의 정보를 얻는다.
 	}
 	closedir(proc_dir);
+}
+
+void sort_by_cpu() { //%CPU순으로 정렬
+	for(int i = 0; i < tasks; i++) {
+		int mnum = i;
+		for(int j = i+1; j <= tasks; j++) {
+			if(procs[mnum].CPU < procs[j].CPU) {
+				mnum = j;
+			}
+			else if(procs[mnum].CPU == procs[j].CPU) { //사용량이 같을 경우 PID가 작은 순으로 정렬
+				if(procs[mnum].PID > procs[j].PID) mnum = j;
+			}
+		}
+		if(mnum != i) swap(&procs[mnum], &procs[i]);
+	}
+}
+
+void sort_by_time() { //TIME+순으로 정렬
+	for(int i = 0; i < tasks; i++) {
+		int mnum = i;
+		for(int j = i+1; j <= tasks; j++) {
+			if(procs[mnum].TIME < procs[j].TIME) {
+				mnum = j;
+			}
+			else if(procs[mnum].TIME == procs[j].TIME) {
+				if(procs[mnum].PID > procs[j].PID) mnum = j;
+			}
+		}
+		if(mnum != i) swap(&procs[mnum], &procs[i]);
+	}
+}
+
+void sort_by_mem() { //%MEM순으로 정렬
+	for(int i = 0; i < tasks; i++) {
+		int mnum = i;
+		for(int j = i+1; j <= tasks; j++) {
+			if(procs[mnum].MEM < procs[j].MEM) {
+				mnum = j;
+			}
+			else if(procs[mnum].MEM == procs[j].MEM) {
+				if(procs[mnum].PID > procs[j].PID) mnum = j;
+			}
+		}
+		if(mnum != i) swap(&procs[mnum], &procs[i]);
+	}
 }
 
 void get_data() {//데이터를 읽어오는 함수
@@ -349,18 +439,20 @@ void get_data() {//데이터를 읽어오는 함수
 	char loadavg[15];
 	get_loadavg(loadavg);
 	loadavg[14] = '\0';
-	get_procs();
-	get_cpu_info();
 	get_mem_info();
+	get_cpu_info();
+	get_procs();
 	
+	memset(result, 0, sizeof(result));
+
 	//head 저장
-	sprintf(result[0], "top - %02d:%02d:%02d up  %2d:%02d,%3d user,  load average: %s\n", t->tm_hour, t->tm_min, t->tm_sec, uptime_h, uptime_m, user, loadavg);
-	sprintf(result[1], "Tasks: %d total,   %d running, %d sleeping,   %d stopped,   %d zombie\n", tasks, run, slp, stop, zombie);
-	sprintf(result[2], "%%Cpu(s):  %.1f us,  %.1f sy,  %.1f ni,  %.1f id,  %.1f wa,  %.1f hi,  %.1f si,  %.1f st\n", us, sy, ni, id, wa, hi, si, st);
-	sprintf(result[3], "MiB Mem :   %.1f total,   %.1f free,   %.1f used,   %.1f buff/cache\n", memtotal, memfree, memused, membuff_cache);
-	sprintf(result[4], "MiB Swap:   %.1f total,   %.1f free,   %.1f used.   %.1f avail Mem\n\n", swaptotal, swapfree, swapused, swapavail_mem);
-	result[5] = "\n";
-	snprintf(result[6], win.ws_col, "%5s %-8s %3s %3s %7s %6s %6s %c %4s %4s   %7s %s",
+	sprintf(result[0], "top - %02d:%02d:%02d up  %2d:%02d,%3d user,  load average: %s", t->tm_hour, t->tm_min, t->tm_sec, uptime_h, uptime_m, user, loadavg);
+	sprintf(result[1], "Tasks: %d total,   %d running, %d sleeping,   %d stopped,   %d zombie", tasks, run, slp, stop, zombie);
+	sprintf(result[2], "%%Cpu(s):  %.1f us,  %.1f sy,  %.1f ni,  %.1f id,  %.1f wa,  %.1f hi,  %.1f si,  %.1f st", us, sy, ni, id, wa, hi, si, st);
+	sprintf(result[3], "MiB Mem :   %.1f total,   %.1f free,   %.1f used,   %.1f buff/cache", memtotal, memfree, memused, membuff_cache);
+	sprintf(result[4], "MiB Swap:   %.1f total,   %.1f free,   %.1f used.   %.1f avail Mem", swaptotal, swapfree, swapused, swapavail_mem);
+	strcpy(result[5], "");
+	sprintf(result[6], "%5s %-8s %3s %3s %7s %6s %6s %c %4s %4s   %7s %s",
 		"PID", "USER", "PR", "NI", "VIRT", "RES", "SHR", 'S', "%CPU", "%MEM", "TIME+", "COMAND");
 }
 
@@ -372,22 +464,20 @@ void print() { //결과를 출력하는 함수
 		exit(1);
 	}
 	
-	char tm[8];
-	for(int i = 0; i < tasks; i++) {
-		memset(tm, 0, sizeof(tm));
+	char tm[8]; //TIME 문자열 저장함수
+	int idx = 7;
+	for(int i = start_row; i < tasks; i++) {
+		memset(tm, 0, sizeof(tm));//TIME을 문자열로 나타내기
 		int min = procs[i].TIME / 6000;
 		int sec = (procs[i].TIME - (min *6000)) / 100;
 		int rest = (procs[i].TIME - (min *6000) - (sec * 100));
-		sprintf(tm, "%d:%d.%d", min, sec, rest);
-		snprintf(result[i+7], win.ws_col, "%5ld %-8s %3s %3d %7lld %6lld %6lld %c %4.1lf %4.1lf    %7s %s", procs[i].PID, procs[i].USER, procs[i].PR, procs[i].NI, procs[i].VIRT, procs[i].RES,
+		sprintf(tm, "%d:%02d.%02d", min, sec, rest);
+		snprintf(result[idx++], win.ws_col, "%5ld %-8s %3s %3d %7lld %6lld %6lld %c %4.1lf %4.1lf   %7s %s", procs[i].PID, procs[i].USER, procs[i].PR, procs[i].NI, procs[i].VIRT, procs[i].RES,
 				procs[i].SHR, procs[i].S, procs[i].CPU, procs[i].MEM, tm, procs[i].COMMAND);
 	}
 	
 	//내용 출력
-	for(int i = 0; i < 7; i++) {
-		printf("%s\n", reusult[i]);
-	}
-	for(int i = start_row + 6; i < win.ws_row + start_row - 7; i++) {
+	for(int i = 0; i < win.ws_row-1; i++) {
 		printf("%s\n", result[i]);
 	}
 }
@@ -416,9 +506,11 @@ void return_status() {
 
 
 int main() {
+	option = 'P';
 	printf("\n");
 	signal(SIGALRM, handler);
 	get_data();
+	sort_by_cpu();
 	print();
 
 	//3초마다 갱신
@@ -430,7 +522,19 @@ int main() {
 		if(input == 'q') {
 			exit(0);
 		}
-		else {
+		else if(input == 'P') {
+			option = 'P';
+			raise(SIGALRM);
+		}
+		else if(input == 'M') {
+			option = 'M';
+			raise(SIGALRM);
+		}
+		else if(input == 'T') {
+			option = 'T';
+			raise(SIGALRM);
+		}
+		else { //방향키를 입력하는 경우
 			for(int i = 0; i < 2; i++) {
 				input = get_input();
 				sum += input;
