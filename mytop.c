@@ -15,8 +15,10 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <ncurses.h>
+#include <curses.h>
 #include <stdbool.h>
 #include <math.h>
+#include <limits.h>
 
 #define MAX 1024
 struct tm *t;
@@ -510,28 +512,33 @@ void print() { //결과를 출력하는 함수
 
 int get_input() { //입력을 받는 함수
 	int ret;
-	struct termios term;
-	tcgetattr(STDIN_FILENO, &term);
-	term.c_lflag &= ~ICANON; //line단위 입력 끄기
-	term.c_lflag &= ~ECHO; //입력이 터미널에 보이지 않게 하기
+	//struct termios term;
+	//tcgetattr(STDIN_FILENO, &term);
+	//term.c_lflag &= ~ICANON; //line단위 입력 끄기
+	//term.c_lflag &= ~ECHO; //입력이 터미널에 보이지 않게 하기
 	//term.c_cc[VMIN] = 1; //최소 입력 버퍼 크기
 	//term.c_cc[VTIME] = 0; //버퍼 비우는 시간
-	tcsetattr(STDIN_FILENO, TCSAFLUSH, &term); 
+	//tcsetattr(STDIN_FILENO, TCSAFLUSH, &term); 
 	ret = getchar();
 
 	return ret;
 }
 
-void return_status() {
-	struct termios term;
-	tcgetattr(STDIN_FILENO, &term);
-	term.c_lflag |= ICANON; //line단위 입력 켜기
-	term.c_lflag |= ECHO; //입력이 터미널에 다시 보이게 하기
-	tcsetattr(STDIN_FILENO, TCSAFLUSH, &term);
+void start_status() {
+	noecho(); //echo 제거
+	curs_set(0); //커서 안보이게 함
+	initscr(); //출력 윈도우 초기화
+	halfdelay(10); //0.1초마다 갱신
 }
 
+void return_status() {
+	endwin();
+	echo();
+}
 
 int main() {
+
+	//start_status();
 	//초기 옵션 설정
 	option = 'P';
 	uptime_line = 0;
