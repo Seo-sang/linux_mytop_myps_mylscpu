@@ -40,9 +40,12 @@ int option_c; //명령 인자 표시/ 비표시
 char string[MAX];
 int option_i;
 
+int print_row; //result배열에 저장할 행 번
+
 //cpu읽은 정보
 int current_cpu[9];
 int before_cpu[9];
+
 
 typedef struct {
 	unsigned long PID;
@@ -84,6 +87,8 @@ long long get_value(const char* str) { //string으로부터 정수값을 얻는 
 void handler(int signo) { //SIGALRM 핸들러 함수
 	memset(result, 0, sizeof(result));
 	memset(procs, 0, sizeof(procs));
+	print_row = 0;
+	erase();
 	get_data();
 	if(option == 'P')
 		sort_by_cpu();
@@ -93,6 +98,7 @@ void handler(int signo) { //SIGALRM 핸들러 함수
 		sort_by_mem();
 
 	print();
+	refresh();
 	alarm(delay);
 }
 
@@ -466,15 +472,16 @@ void get_data() {//데이터를 읽어오는 함수
 	get_procs();
 	
 	memset(result, 0, sizeof(result));
-
 	//head 저장
-	sprintf(result[0], "top - %02d:%02d:%02d up  %2d:%02d,%3d user,  load average: %s", t->tm_hour, t->tm_min, t->tm_sec, uptime_h, uptime_m, user, loadavg);
-	sprintf(result[1], "Tasks: %d total,   %d running, %d sleeping,   %d stopped,   %d zombie", tasks, run, slp, stop, zombie);
-	sprintf(result[2], "%%Cpu(s):  %.1f us,  %.1f sy,  %.1f ni,  %.1f id,  %.1f wa,  %.1f hi,  %.1f si,  %.1f st", us, sy, ni, id, wa, hi, si, st);
-	sprintf(result[3], "MiB Mem :   %.1f total,   %.1f free,   %.1f used,   %.1f buff/cache", memtotal, memfree, memused, membuff_cache);
-	sprintf(result[4], "MiB Swap:   %.1f total,   %.1f free,   %.1f used.   %.1f avail Mem", swaptotal, swapfree, swapused, swapavail_mem);
-	strcpy(result[5], "");
-	sprintf(result[6], "%7s %-8s %3s %3s %7s %6s %6s %c %4s %4s   %7s %s",
+	if(!uptime_line) {
+		sprintf(result[print_row++], "top - %02d:%02d:%02d up  %2d:%02d,%3d user,  load average: %s", t->tm_hour, t->tm_min, t->tm_sec, uptime_h, uptime_m, user, loadavg);
+	}
+	sprintf(result[print_row++], "Tasks: %d total,   %d running, %d sleeping,   %d stopped,   %d zombie", tasks, run, slp, stop, zombie);
+	sprintf(result[print_row++], "%%Cpu(s):  %.1f us,  %.1f sy,  %.1f ni,  %.1f id,  %.1f wa,  %.1f hi,  %.1f si,  %.1f st", us, sy, ni, id, wa, hi, si, st);
+	sprintf(result[print_row++], "MiB Mem :   %.1f total,   %.1f free,   %.1f used,   %.1f buff/cache", memtotal, memfree, memused, membuff_cache);
+	sprintf(result[print_row++], "MiB Swap:   %.1f total,   %.1f free,   %.1f used.   %.1f avail Mem", swaptotal, swapfree, swapused, swapavail_mem);
+	strcpy(result[print_row++], "");
+	sprintf(result[print_row++], "%7s %-8s %3s %3s %7s %6s %6s %c %4s %4s   %7s %s",
 		"PID", "USER", "PR", "NI", "VIRT", "RES", "SHR", 'S', "%CPU", "%MEM", "TIME+", "COMMAND");
 }
 
@@ -487,7 +494,6 @@ void print() { //결과를 출력하는 함수
 	}
 	
 	char tm[8]; //TIME 문자열 저장함수
-	int idx = 7;
 	for(int i = start_row; i < tasks; i++) {
 		if(option_i && procs[i].CPU < 0.05) continue;
 		memset(tm, 0, sizeof(tm));//TIME을 문자열로 나타내기
@@ -495,18 +501,22 @@ void print() { //결과를 출력하는 함수
 		int sec = (procs[i].TIME - (min *6000)) / 100;
 		int rest = (procs[i].TIME - (min *6000) - (sec * 100));
 		sprintf(tm, "%d:%02d.%02d", min, sec, rest);
-		snprintf(result[idx++], win.ws_col, "%7ld %-8s %3s %3d %7lld %6lld %6lld %c %4.1lf %4.1lf   %7s %s", procs[i].PID, procs[i].USER, procs[i].PR, procs[i].NI, procs[i].VIRT, procs[i].RES,
+		snprintf(result[print_row++], win.ws_col, "%7ld %-8s %3s %3d %7lld %6lld %6lld %c %4.1lf %4.1lf   %7s %s", procs[i].PID, procs[i].USER, procs[i].PR, procs[i].NI, procs[i].VIRT, procs[i].RES,
 				procs[i].SHR, procs[i].S, procs[i].CPU, procs[i].MEM, tm, procs[i].COMMAND);
 	}
 	
 	//내용 출력
-	if(!uptime_line)
-		printf("%s\n", result[0]);
-	for(int i = 1; i < 6; i++) {
-		printf("%s\n", result[i]);
+	if(!uptime_line) {
+		for(int i = 0; i < 6; i++)
+			mvprintw(i, 0, "%s", result[i]);
+		for(int i = 6; i <= win.ws_row; i++)
+			mvprintw(i, 0, "%s", result[i] + begin[start_col]);
 	}
-	for(int i = 6; i < win.ws_row-1 + uptime_line; i++) {
-		printf("%s\n", result[i] + begin[start_col]);
+	else {
+		for(int i = 0; i < 5; i++)
+			mvprintw(i, 0, "%s", result[i]);
+		for(int i = 5; i <= win.ws_row; i++)
+			mvprintw(i, 0, "%s", result[i] + begin[start_col]);
 	}
 }
 
@@ -538,7 +548,8 @@ void return_status() {
 
 int main() {
 
-	//start_status();
+	for(int i = 12; i < MAX; i++) begin[i] = begin[i-1] + 8;
+	start_status();
 	//초기 옵션 설정
 	option = 'P';
 	uptime_line = 0;
@@ -546,11 +557,11 @@ int main() {
 	option_c = 0;
 	option_i = 0;
 
-	printf("\n");
 	signal(SIGALRM, handler);
 	get_data();
 	sort_by_cpu();
 	print();
+	refresh();
 
 	//3초마다 갱신
 	
