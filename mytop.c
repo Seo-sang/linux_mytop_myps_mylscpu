@@ -52,7 +52,7 @@ int option_b; //나열모드 옵션
 
 int special_user; //특정 user만 출력하는 경우 user의 수
 char users[MAX]; //출력 user 넣는 함수
-
+char blank[MAX];
 int kill_pid; //signal을 보낼 pid
 //cpu읽은 정보
 int current_cpu[9];
@@ -627,12 +627,14 @@ void operation_d() { //d옵션을 수행하는 함수
 	int c;
 	int chk = 0;
 	if(!uptime_line) { //uptime_line이 있는 경우
+		mvaddstr(5, 0, blank);
 		mvaddstr(5, 0, "Change delay from 3.0 to "); 
 	}
 	else { //uptime_line이 없는 경우
+		mvaddstr(4, 0, blank);
 		mvaddstr(4, 0, "Change delay from 3.0 to ");
 	}
-	while((c = getch()) != '\n') {
+	while((c = getch()) != '\n') {	
 		if(c == 8) { //backspace인 경우
 			idx--;
 			delch();
@@ -659,12 +661,14 @@ void operation_u() {
 	char c;
 	int chk = 0;
 	if(!uptime_line) { //uptime_line이 있는 경우
+		mvaddstr(5, 0, blank);
 		mvaddstr(5, 0, "Which user (blank for all) "); 
 	}
 	else { //uptime_line이 없는 경우
+		mvaddstr(4, 0, blank);
 		mvaddstr(4, 0, "Which user (blank for all) ");
 	}
-	//c = getch();
+	char tmp[10];
 	while((c = getch()) != '\n') {
 		if(c == 8) { //backspace인 경우
 			idx--;
@@ -679,6 +683,7 @@ void operation_u() {
 	}
 	if(!chk) { //esc를 누르지 않았을 때
 		strncpy(users, str, MAX); //출력하고자 하는 user에 복사
+		mvaddstr(5, 0, users);
 		if(idx == 0) //아무것도 입력을 받지 않은 경우
 			special_user = 0;
 		else
@@ -695,9 +700,7 @@ void operation_k() { //k옵션을 수행하는 함수
 	char str[MAX];
 	char sig[10];
 	char tmp[MAX];
-	char blank[MAX];
 	char trash[MAX];
-	memset(blank, ' ', 70);
 	memset(str, 0, MAX);
 	memset(sig, 0, 10);
 	int idx = 0;
@@ -706,9 +709,11 @@ void operation_k() { //k옵션을 수행하는 함수
 	memset(tmp, 0, MAX);
 	sprintf(tmp, "PID to signal/kill [default pid = %ld] ", procs[0].PID);
 	if(!uptime_line) { //uptime_line이 있는 경우
+		mvaddstr(5, 0, blank);
 		mvaddstr(5, 0, tmp); //default는 가장 위에 있는 Process
 	}
 	else { //uptime_line이 없는 경우
+		mvaddstr(4, 0, blank);
 		mvaddstr(4, 0, tmp);
 	}
 	while((c = getch()) != '\n') {
@@ -741,7 +746,6 @@ void operation_k() { //k옵션을 수행하는 함수
 		}
 		idx = 0;
 		tcflush(0, TCIFLUSH);
-		getch();
 		while((c = getch()) != '\n') {
 			if(c == 8) { //backspace인 경우
 				idx--;
@@ -781,7 +785,7 @@ void start_status() { //ncurses 초기 설정
 int main(int argc, char **argv) {
 
 	for(int i = 12; i < MAX; i++) begin[i] = begin[i-1] + 8;
-
+	memset(blank, ' ', 70);
 	//초기 옵션 설정
 	signal(SIGALRM, handler); //alarm 시그널에 동작할 handler함수를 설정
 	option = 'P';
@@ -854,7 +858,7 @@ int main(int argc, char **argv) {
 				uptime_line = 1;
 			raise(SIGALRM);
 		}
-		else if(input == ' ') { //refresh
+		else if(input == ' ' || input == 27) { //space나 esc를 누를 경우 refresh
 			raise(SIGALRM);
 		}
 		else if(input == 'c') { //명령 인자 표시/ 비표시
