@@ -183,7 +183,7 @@ ll get_VmLck(int pid) {
 }
 
 
-void get_tty(const char* path, int index) {
+void get_tty(int index) {
 	/*
 	   if(access(path, F_OK) < 0) { //proc/pid/fd/0이 없을 경우
 	   DIR *dp;
@@ -237,7 +237,10 @@ void get_proc_stat(const char* path, int index) {
 	stat(path, &statbuf);
 	struct passwd *upasswd = getpwuid(statbuf.st_uid);
 	strcpy(procs[index].USER, upasswd->pw_name);
-	if(procs[index].USER[7] != '\0') procs[index].USER[7] = '+';
+	if(procs[index].USER[8] != '\0') {
+		procs[index].USER[7] = '+';
+		procs[index].USER[8] = '\0';
+	}
 
 	//UID읽기
 	procs[index].UID = upasswd->pw_uid;
@@ -409,13 +412,20 @@ void get_procs() { //pid를 확인하고 process 정보들을 가져오는 함�
 		if(access(status_path, F_OK) == 0) {
 			get_proc_cmdline(cmdline_path, i);
 		}
+		get_tty(i);
 	}
 
 	closedir(proc_dir);
 }
 
 void print_data() { //데이터들을 불러오는 함수
-
+	
+	//터미널 사이즈
+	struct winsize win;
+	if(ioctl(0, TIOCGWINSZ, (char*)&win) < 0) {
+		fprintf(stderr, "ioctl error\n");
+		exit(1);
+	}
 	//첫 줄 출력
 	/*
 	   if(option.l)
@@ -472,17 +482,26 @@ void print_data() { //데이터들을 불러오는 함수
 	else
 		printf(" CMD\n");
 
+	int strlen; //string 길이
 	for(int index = 0; index < tasks; index++) {
+		strlen = 0;
 		if(option.no) {
 			if(procs[index].STAT[0] != 'R') continue;
 		}
-		if(!(option.bar && option.f) && option.u)
+		if(!(option.bar && option.f) && option.u) {
 			printf("%-8s", procs[index].USER);
-		if((option.bar && option.f))
+			strlen += 8;
+		}
+		if((option.bar && option.f)) {
 			printf("%-8s", procs[index].USER);
+			strlen += 8;
+		}
 		printf("   %4lld", procs[index].PID);
-		if((option.bar && option.f))
+		strlen += 7;
+		if((option.bar && option.f)) {
 			printf("   %4lld", procs[index].PPID);
+			strlen += 7;
+		}
 		/*
 		   if((option.bar && option.f))
 		   printf("  C");
@@ -491,6 +510,7 @@ void print_data() { //데이터들을 불러오는 함수
 			struct tm *t;
 			t = localtime(&procs[index].START);
 			printf(" %2d:%02d", t->tm_hour,  t->tm_min);
+			strlen += 6;
 		}
 		/*
 		   if(option.l)
@@ -498,14 +518,22 @@ void print_data() { //데이터들을 불러오는 함수
 		   if(option.l)
 		   printf("  NI");
 		 */
-		if(option.u)
+		if(option.u) {
 			printf(" %4.1f", procs[index].CPU);
-		if(option.u)
+			strlen += 5;
+		}
+		if(option.u) {
 			printf(" %4.1f", procs[index].MEM);
-		if(option.u)
+			strlen += 5;
+		}
+		if(option.u) {
 			printf(" %6lld", procs[index].VSZ);
-		if(option.u)
-			printf(" %5lld", procs[index].RSS);
+			strlen += 7;
+		}
+		if(option.u) {
+			printf(" %7lld", procs[index].RSS);
+			strlen += 8;
+		}
 		/*
 		   if((option.l && option.bar))
 		   printf(" ADDR");
@@ -515,28 +543,52 @@ void print_data() { //데이터들을 불러오는 함수
 		   printf(" WCHAN");
 		   */
 		printf(" %-9s", procs[index].TTY);
-		if(option.u || option.r || option.x)
+		strlen += 10;
+		if(option.u || option.r || option.x) {
 			printf("%-4s", procs[index].STAT);
+			strlen += 4;
+		}
 		if(option.u) {
 			struct tm *t;
 			t = localtime(&procs[index].START);
 			printf(" %2d:%02d", t->tm_hour, t->tm_min);
+			strlen += 6;
 		}
 		if(option.bar || option.no) {
 			int h = procs[index].TIME / 360000;
 			int m = (procs[index].TIME - (h *360000)) / 6000;
 			int s = procs[index].TIME - (h * 360000) - (m * 6000);
+			while(s >= 100) s /= 10;
 			printf("    %02d:%02d:%02d", h, m, s);
+			strlen += 12;
 		}
 		else {
 			int m = procs[index].TIME / 6000;
 			int s = procs[index].TIME - (m * 6000);
-			printf("   %d:%02d", m, s);
+			while(s >= 100) s /= 10;
+			printf("   %2d:%02d", m, s);
+			strlen += 8;
 		}
-		if(option.no || option.r || option.u || option.x || !option.bar || option.e || option.f)
-			printf(" %s\n", procs[index].COMMAND);
-		else
-			printf(" %s\n", procs[index].CMD);
+		char cmdstr[MAX];
+		memset(cmdstr, 0, MAX);
+		if(option.no || option.r || option.u || option.x || !option.bar || option.e || option.f) {
+			if(procs[index].COMMAND[0] == '\0') {
+				strcpy(cmdstr, " [");
+				strcat(cmdstr, procs[index].CMD);
+				strcat(cmdstr, "]");
+			}
+			else {
+				strcpy(cmdstr, " ");
+				strcat(cmdstr, procs[index].COMMAND);
+			}
+		}
+		else {
+			strcpy(cmdstr, " ");
+			strcat(cmdstr, procs[index].CMD);
+		}
+		for(int i = 0; i < win.ws_col-strlen-1; i++)
+			putc(cmdstr[i], stdout);
+		putc('\n', stdout);
 	}
 }
 
