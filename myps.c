@@ -41,9 +41,9 @@ typedef struct {
 	//int F;
 	//int S;
 	char USER[MAX]; //*
-	ll UID; //*
-	ll PID; //*
-	ll PPID; //*
+	uid_t UID; //*
+	pid_t PID; //*
+	pid_t PPID; //*
 	//int C;
 	char PRI[MAX]; //*
 	char NI[MAX]; //*
@@ -63,12 +63,18 @@ typedef struct {
 	int ttyNr; //*
 } proc;
 
+//나의 정보
+pid_t mypid;
+uid_t myuid;
+char mytty[MAX];
 
 //data들
-int tasks, run, slp, stop, zombie;
-double memtotal;
+int tasks;
+double memtotal; //전체 메모리
 opt option; //option들
 proc procs[MAX]; //process 정보들
+int special_pid = 0;
+pid_t pids[MAX];
 
 ll get_value(const char* str) { //string으로부터 정수값 얻기
 	ll ret = 0;
@@ -96,22 +102,22 @@ ll get_uptime() { //Uptime을 초단위로 바꾸는 함수
 		exit(1);
 	}
 
-	read(fd, buffer, MAX);
+	read(fd, buffer, MAX); ///proc/uptime을 읽음
 	ll ret;
 
 	int idx = 0;
 
-	while(buffer[idx] != ' ') idx++;
+	while(buffer[idx] != ' ') idx++; //첫 번째 토큰을 읽음
 
-	memset(buffer + idx, 0, sizeof(char) * (MAX - idx));
+	memset(buffer + idx, 0, sizeof(char) * (MAX - idx)); //뒷부분은 널로 채움
 
-	ret = atoll(buffer);
+	ret = atoll(buffer); //ll형으로 바꿈
 	close(fd);
 
 	return ret;
 }
 
-void get_mem_info() {
+void get_mem_info() { ///proc/meminfo로부터 memtotal을 얻음
 	int fd;
 
 	if((fd = open("/proc/meminfo", O_RDONLY)) < 0) { //proc/meminfo 파일 열기
@@ -127,30 +133,30 @@ void get_mem_info() {
 
 	close(fd);
 
-	char mem[MAX][MAX];
+	char mem[MAX][MAX]; //파싱 정보 저장
 	memset(mem, 0, sizeof(mem));
 	int i = 0;
-	char *ptr = strtok(mem_tmp, "\n"); //읽은 정보 파싱
+	char *ptr = strtok(mem_tmp, "\n"); //개행단위로 읽은 정보 파싱
 	while(ptr != NULL) {
 		strcpy(mem[i++], ptr);
 		ptr = strtok(NULL, "\n"); //개행으로 정보 파싱
 	}
 
-	//파싱한 정보 int형으로 바꾸기
+	//파싱한 정보 정수형으로 바꾸기
 	int mtotal = get_value(mem[0]);
 
 	//memtotal 얻기
-	memtotal = (double)mtotal / 1024;
+	memtotal = (double)mtotal / 1024; //MiB단위로 바꿈
 }
 
-ll get_VmLck(int pid) {
-	char path[MAX];
-	char tmp[MAX];
-	char status[MAX][MAX];
+ll get_VmLck(int pid) { //VmLck를 얻는 함수
+	char path[MAX]; //경로
+	char tmp[MAX]; //읽은 정보 저장할 버퍼
+	char status[MAX][MAX]; //파싱결과 저장
 	memset(path, 0, MAX);
 	memset(tmp, 0, MAX);
 	memset(status, 0, sizeof(status));
-	sprintf(path, "/proc/%d/status", pid);
+	sprintf(path, "/proc/%d/status", pid); //경로 지정
 
 	ll ret = 0;
 
@@ -166,13 +172,14 @@ ll get_VmLck(int pid) {
 	close(fd);
 
 	int i = 0;
-	char *ptr = strtok(tmp, "\n"); //개행으로 정보 파싱
+	//개행 단위로 정보 파싱
+	char *ptr = strtok(tmp, "\n");
 	while(ptr != NULL) {
 		strcpy(status[i++], ptr);
 		ptr = strtok(NULL, "\n");
 	}
-
-	for(int j = 0; j < i; j++) {
+	//VmLck가 있는 경우 저장
+	for(int j = 0; j < i; j++) { 
 		if(!strncmp(status[j], "VmLck", 5)) { //VmLck를 찾은 경우
 			ll ret = get_value(status[j]);
 			break;
@@ -182,31 +189,92 @@ ll get_VmLck(int pid) {
 	return ret;
 }
 
+void get_environ(int index) {
+	if(procs[index].UID != myuid) return; //uid가 다르면 접근 권한이 없다.
+	char path[MAX];
+	char buffer[MAX];
+	memset(path, 0, MAX);
+	memset(buffer, 0, MAX);
+	sprintf(path, "/proc/%d/environ", procs[index].PID);
+	int fd;
+	if((fd = open(path, O_RDONLY)) < 0) {
+		fprintf(stderr, "%s open error\n", path);
+		exit(1);
+	}
+	if(read(fd, buffer, MAX) == 0) {
+		fprintf(stderr, "%s file read error\n", path);
+		exit(1);
+	}
+	for(int i = 0; i < MAX; i++) { //사이의 널은 공백으로 바꾼다
+		if(buffer[i] == '\0') {
+			if(buffer[i+1] == '\0') break;
+			else buffer[i] = ' ';
+		}
+	}
+	//환경변수가 있을 경우 COMMAND뒤에 이어 붙인다.
+	if(strlen(buffer)) {
+		strcat(procs[index].COMMAND, " ");
+		strncat(procs[index].COMMAND, buffer, MAX/2);
+	}
+}
 
 void get_tty(int index) {
+
+	char fdpath[MAX];			//0번 fd에 대한 절대 경로
+	memset(fdpath, '\0', MAX);
+	sprintf(fdpath, "/proc/%d/fd/0", procs[index].PID);
+
+	if(access(fdpath, F_OK) < 0){	//fd 0이 없을 경우
+
+		DIR *dp;
+		struct dirent *dentry;
+		if((dp = opendir("/dev")) == NULL){		// 터미널 찾기 위해 /dev 디렉터리 open
+			fprintf(stderr, "/dev directory open error\n");
+			exit(1);
+		}
+		char nowPath[MAX];
+
+		while((dentry = readdir(dp)) != NULL){	// /dev 디렉터리 탐색
+			memset(nowPath, 0, MAX);	// 현재 탐색 중인 파일 절대 경로
+			sprintf(nowPath, "/dev/%s", dentry->d_name);
+
+			struct stat statbuf;
+			if(stat(nowPath, &statbuf) < 0){	// stat 획득
+				fprintf(stderr, "stat error for %s\n", nowPath);
+				exit(1);
+			}
+			if(!S_ISCHR(statbuf.st_mode))		//문자 디바이스 파일이 아닌 경우 skip
+				continue;
+			else if(statbuf.st_rdev == procs[index].ttyNr){	//문자 디바이스 파일의 디바이스 ID가 ttyNr과 같은 경우
+				strcpy(procs[index].TTY, dentry->d_name);	//tty에 현재 파일명 복사
+				break;
+			}
+		}
+		closedir(dp);
+
+		if(!strlen(procs[index].TTY))					// /dev에서도 찾지 못한 경우
+			strcpy(procs[index].TTY, "?");				//nonTerminal
+	}
+	else{
+		char symLinkName[MAX];
+		memset(symLinkName, 0, MAX);
+		if(readlink(fdpath, symLinkName, MAX) < 0){
+			fprintf(stderr, "readlink error for %s\n", fdpath);
+			exit(1);
+		}
+		if(!strcmp(symLinkName, "/dev/null"))		//symbolic link로 가리키는 파일이 /dev/null일 경우
+			strcpy(procs[index].TTY, "?");					//nonTerminal
+		else
+			sscanf(symLinkName, "/dev/%s", procs[index].TTY);	//그 외의 경우 tty 획득
+
+	}
+
+	if(procs[index].PID == mypid)
+		strcpy(mytty, procs[index].TTY);
+
+	return;
+
 	/*
-	   if(access(path, F_OK) < 0) { //proc/pid/fd/0이 없을 경우
-	   DIR *dp;
-	   struct dirent *dentry;
-	   if((dp = opendir("/dev")) < 0) {
-	   fpritnf(stderr, "/dev directory open error\n");
-	   exit(1);
-	   }
-
-	   char devpath[MAX];
-	   while((dentry = readdir(dp)) != NULL) { //dev 디렉토리 읽기
-	   memset(devpath, 0, MAX);
-	   sprintf(devpath, "/dev/%s", dentry->d_name);
-
-	   struct stat statbuf;
-	   if(stat(devpath, &statbuf) < 0) {
-	   fprintf(stderr, "stat error\n");
-	   exit(1);
-	   }
-
-
-	   }
-	   }*/
 	if(procs[index].ttyNr == 0) {
 		strcpy(procs[index].TTY, "?");
 	}
@@ -227,6 +295,10 @@ void get_tty(int index) {
 			strcpy(procs[index].TTY, link +3);
 		}
 	}
+	if(procs[index].PID == mypid) {
+		strcpy(mytty, procs[index].TTY);
+	}
+	*/
 }
 
 
@@ -372,6 +444,16 @@ void get_proc_cmdline(const char* path, int index) {
 		fprintf(stderr, "/proc/pid/cmdline file read error\n");
 		exit(1);
 	}
+	//두번 연속 널이 나올 경우 종료 그렇지 않으면 공백으로 처리
+	for(int i = 0; i < MAX; i++) {
+		if(procs[index].COMMAND[i] == '\0') {
+			if(procs[index].COMMAND[i+1] == '\0') break;
+			else procs[index].COMMAND[i] = ' ';
+		}
+	}
+	if(!strlen(procs[index].COMMAND)) { //없는 경우
+		sprintf(procs[index].COMMAND, "[%s]", procs[index].CMD);
+	}
 	close(fd);
 }
 
@@ -388,7 +470,7 @@ void get_procs() { //pid를 확인하고 process 정보들을 가져오는 함�
 
 	while((dp = readdir(proc_dir)) != NULL) { //하위 파일들을 하나씩 읽는다.
 		if(isdigit(dp->d_name[0])) { //하위폴더가 숫자일 경우(process 폴더인 경우)
-			procs[tasks++].PID = atoi(dp->d_name); //pid저장
+			procs[tasks++].PID = atol(dp->d_name); //pid저장
 		}
 	}
 
@@ -399,9 +481,9 @@ void get_procs() { //pid를 확인하고 process 정보들을 가져오는 함�
 		memset(stat_path, 0, MAX);
 		memset(status_path, 0, MAX);
 		memset(cmdline_path, 0, MAX);
-		sprintf(stat_path, "/proc/%lld/stat", procs[i].PID);
-		sprintf(status_path, "/proc/%lld/status", procs[i].PID);
-		sprintf(cmdline_path, "/proc/%lld/cmdline", procs[i].PID);
+		sprintf(stat_path, "/proc/%d/stat", procs[i].PID);
+		sprintf(status_path, "/proc/%d/status", procs[i].PID);
+		sprintf(cmdline_path, "/proc/%d/cmdline", procs[i].PID);
 		//예외처리 파일이 존재할 때 열기
 		if(access(stat_path, F_OK) == 0) {
 			get_proc_stat(stat_path, i);
@@ -413,26 +495,33 @@ void get_procs() { //pid를 확인하고 process 정보들을 가져오는 함�
 			get_proc_cmdline(cmdline_path, i);
 		}
 		get_tty(i);
+		if(option.e) get_environ(i);
 	}
 
 	closedir(proc_dir);
 }
 
+bool isSpecial(pid_t p) {
+	bool ret = false;
+	for(int i = 0; i < special_pid; i++) {
+		if(pids[i] ==  p) {
+			ret = true;
+			break;
+		}
+	}
+	return ret;
+}
+
 void print_data() { //데이터들을 불러오는 함수
-	
+
 	//터미널 사이즈
 	struct winsize win;
 	if(ioctl(0, TIOCGWINSZ, (char*)&win) < 0) {
 		fprintf(stderr, "ioctl error\n");
 		exit(1);
 	}
+
 	//첫 줄 출력
-	/*
-	   if(option.l)
-	   printf("F");
-	   if((option.l && option.bar))
-	   printf(" S");
-	 */
 	if(!(option.bar && option.f) && option.u)
 		printf("USER    ");
 	if((option.bar && option.f))
@@ -440,18 +529,8 @@ void print_data() { //데이터들을 불러오는 함수
 	printf("    PID");
 	if((option.bar && option.f))
 		printf("    PPID");
-	/*
-	   if((option.bar && option.f))
-	   printf("  C");
-	 */
 	if(!option.u &&(option.bar && option.f))
 		printf(" STIME");
-	/*
-	   if(option.l)
-	   printf(" PRI");
-	   if(option.l)
-	   printf("  NI");
-	 */
 	if(option.u)
 		printf(" %%CPU");
 	if(option.u)
@@ -460,21 +539,13 @@ void print_data() { //데이터들을 불러오는 함수
 		printf("    VSZ");
 	if(option.u)
 		printf("   RSS");
-	/*
-	   if((option.l && option.bar))
-	   printf(" ADDR");
-	   if((option.l && option.bar))
-	   printf(" SZ");
-	   if(option.l)
-	   printf(" WCHAN");
-	 */
-	printf(" TTY      ");
-	if(option.u || option.r || option.x)
+	printf(" TTY    ");
+	if(option.u || option.r || option.x || option.f || option.a || option.p)
 		printf("STAT");
 	if(option.u)
 		printf(" START");
-	if(option.bar)
-		printf("    TIME");
+	if(option.bar || option.no)
+		printf("      TIME");
 	else 
 		printf("   TIME");
 	if(option.r || option.u || option.x || !option.bar || option.e || option.f)
@@ -485,9 +556,26 @@ void print_data() { //데이터들을 불러오는 함수
 	int strlen; //string 길이
 	for(int index = 0; index < tasks; index++) {
 		strlen = 0;
-		if(option.no) {
+
+		//process 거르기
+		if(option.r) { //현재 running중인 프로세스만 표시
 			if(procs[index].STAT[0] != 'R') continue;
 		}
+		
+		if(option.a) {
+			if(option.p) {
+				if(option.u) {
+					if(option.x) {
+					}
+					else {
+					}
+				}
+				else {
+				}
+			}
+		}
+
+		//출력 정보 거르기
 		if(!(option.bar && option.f) && option.u) {
 			printf("%-8s", procs[index].USER);
 			strlen += 8;
@@ -496,10 +584,10 @@ void print_data() { //데이터들을 불러오는 함수
 			printf("%-8s", procs[index].USER);
 			strlen += 8;
 		}
-		printf("   %4lld", procs[index].PID);
+		printf(" %6d", procs[index].PID);
 		strlen += 7;
 		if((option.bar && option.f)) {
-			printf("   %4lld", procs[index].PPID);
+			printf(" %6d", procs[index].PPID);
 			strlen += 7;
 		}
 		/*
@@ -531,7 +619,7 @@ void print_data() { //데이터들을 불러오는 함수
 			strlen += 7;
 		}
 		if(option.u) {
-			printf(" %7lld", procs[index].RSS);
+			printf(" %5lld", procs[index].RSS);
 			strlen += 8;
 		}
 		/*
@@ -541,10 +629,10 @@ void print_data() { //데이터들을 불러오는 함수
 		   printf(" SZ");
 		   if(option.l)
 		   printf(" WCHAN");
-		   */
-		printf(" %-9s", procs[index].TTY);
+		 */
+		printf(" %-7s", procs[index].TTY);
 		strlen += 10;
-		if(option.u || option.r || option.x) {
+		if(option.a ||option.u || option.r || option.x || option.f || option.p) {
 			printf("%-4s", procs[index].STAT);
 			strlen += 4;
 		}
@@ -559,28 +647,21 @@ void print_data() { //데이터들을 불러오는 함수
 			int m = (procs[index].TIME - (h *360000)) / 6000;
 			int s = procs[index].TIME - (h * 360000) - (m * 6000);
 			while(s >= 100) s /= 10;
-			printf("    %02d:%02d:%02d", h, m, s);
+			printf("  %02d:%02d:%02d", h, m, s);
 			strlen += 12;
 		}
 		else {
 			int m = procs[index].TIME / 6000;
 			int s = procs[index].TIME - (m * 6000);
 			while(s >= 100) s /= 10;
-			printf("   %2d:%02d", m, s);
+			printf("  %2d:%02d", m, s);
 			strlen += 8;
 		}
 		char cmdstr[MAX];
 		memset(cmdstr, 0, MAX);
-		if(option.no || option.r || option.u || option.x || !option.bar || option.e || option.f) {
-			if(procs[index].COMMAND[0] == '\0') {
-				strcpy(cmdstr, " [");
-				strcat(cmdstr, procs[index].CMD);
-				strcat(cmdstr, "]");
-			}
-			else {
-				strcpy(cmdstr, " ");
-				strcat(cmdstr, procs[index].COMMAND);
-			}
+		if(option.no || option.r || option.u || option.x || !option.bar || option.e) {
+			strcpy(cmdstr, " ");
+			strcat(cmdstr, procs[index].COMMAND);
 		}
 		else {
 			strcpy(cmdstr, " ");
@@ -593,23 +674,34 @@ void print_data() { //데이터들을 불러오는 함수
 }
 
 int main(int argc, char** argv) {
+	mypid = getpid();
+	myuid = getuid();
 	if(argc == 1) option.no = TRUE;
 	else {
 		option.no = FALSE;
-	for(int i = 1; i < argc; i++) { //옵션 설정
-		int idx = 0;
-		while(argv[i][idx] != '\0') {
-			if(argv[i][idx] == '-') option.bar = TRUE;
-			if(argv[i][idx] == 'a') option.a = TRUE;
-			if(argv[i][idx] == 'e') option.e = TRUE;
-			if(argv[i][idx] == 'f') option.f = TRUE;
-			if(argv[i][idx] == 'p') option.p = TRUE;
-			if(argv[i][idx] == 'r') option.r = TRUE;
-			if(argv[i][idx] == 'u') option.u = TRUE;
-			if(argv[i][idx] == 'x') option.x = TRUE;
-			idx++;
+		for(int i = 1; i < argc; i++) { //옵션 설정
+			int idx = 0;
+			while(argv[i][idx] != '\0') {
+				if(argv[i][idx] == '-') option.bar = TRUE;
+				if(argv[i][idx] == 'a') option.a = TRUE;
+				if(argv[i][idx] == 'e') option.e = TRUE;
+				if(argv[i][idx] == 'f') option.f = TRUE;
+				if(argv[i][idx] == 'p') {
+					option.p = TRUE;
+					i++;
+					while(i < argc) {
+						if(!isdigit(argv[i][0])) break;
+						pids[special_pid++] = atoi(argv[i]);
+						i++;
+					}
+					i--;
+				}
+				if(argv[i][idx] == 'r') option.r = TRUE;
+				if(argv[i][idx] == 'u') option.u = TRUE;
+				if(argv[i][idx] == 'x') option.x = TRUE;
+				idx++;
+			}
 		}
-	}
 	}
 	get_mem_info();
 	get_procs();
