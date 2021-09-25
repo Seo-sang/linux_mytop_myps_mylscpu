@@ -84,6 +84,7 @@ void print_2();
 void get_data();
 void sort_by_cpu();
 void sort_by_time();
+int get_ch();
 void sort_by_mem();
 
 long long get_value(const char* str) { //string으로부터 정수값을 얻는 함수
@@ -781,6 +782,19 @@ void start_status() { //ncurses 초기 설정
 	keypad(stdscr, true);
 }
 
+int get_ch() {
+	int ret;
+	struct termios buf, save;
+	tcgetattr(0, &save);
+	buf = save;
+	buf.c_lflag &= ~ICANON;
+	buf.c_lflag &= ~ECHO;
+	tcsetattr(0, TCSAFLUSH,	&buf);
+	ret = getchar();
+	tcsetattr(0, TCSAFLUSH, &save);
+	return ret;
+}
+
 
 int main(int argc, char **argv) {
 
@@ -834,7 +848,7 @@ int main(int argc, char **argv) {
 	while(1) {
 		if(print_max != -1 && print_max == print_cnt) break;
 		alarm(delay);
-		int input = getchar();
+		int input = get_ch();
 		int sum = input;
 		if(input == 'q') { //종료
 			break;
@@ -851,6 +865,7 @@ int main(int argc, char **argv) {
 			option = 'T';
 			raise(SIGALRM);
 		}
+		
 		else if(input == 'l') { //uptime_line숨김/표시
 			if(uptime_line)
 				uptime_line = 0;
@@ -858,49 +873,56 @@ int main(int argc, char **argv) {
 				uptime_line = 1;
 			raise(SIGALRM);
 		}
+		
 		else if(input == ' ' || input == 27) { //space나 esc를 누를 경우 refresh
 			raise(SIGALRM);
 		}
+		
 		else if(input == 'c') { //명령 인자 표시/ 비표시
 			if(option_c) option_c = 0;
 			else option_c = 1;
 			raise(SIGALRM);
 		}
+		
 		else if(input == 'i') {
 			if(option_i) option_i = 0;
 			else option_i = 1;
 			raise(SIGALRM);
 		}
+		
 		else if(input == 'd') { //delay를 설정
 			operation_d();
 		}
+		
 		else if(input == 'u' || input == 'U') { //특정 user 설정
 			operation_u();
 		}
+		
 		else if(input == 'k') { //kill하려는 pid 출력
 			operation_k();
 		}
 		else { //방향키를 입력하는 경우
 			for(int i = 0; i < 2; i++) {
-				input = getchar();
+				input = get_ch();
 				sum += input;
 			}
-			if(sum == 183) {//위 방향키인 경우
+			//printf("%d\n", sum);
+			if(sum == 171) {//위 방향키인 경우
 				start_row--;
 				if(start_row < 0) start_row = 0;
 				raise(SIGALRM);
 			}
-			else if(sum == 184) { //아래 방향키인 경우
+			else if(sum == 172) { //아래 방향키인 경우
 				start_row++;
 				if(start_row == tasks) start_row = tasks-1;
 				raise(SIGALRM);
 			}
-			else if(sum == 186) { //왼쪽 방향키인 경우
+			else if(sum == 174) { //왼쪽 방향키인 경우
 				start_col--;
 				if(start_col < 0) start_col = 0;
 				raise(SIGALRM);
 			}
-			else if(sum == 185) { //오른쪽 방향키인 경우
+			else if(sum == 173) { //오른쪽 방향키인 경우
 				start_col++;
 				raise(SIGALRM);
 			}
