@@ -315,31 +315,6 @@ void get_tty(int index) {
 
 	return;
 
-	/*
-	if(procs[index].ttyNr == 0) {
-		strcpy(procs[index].TTY, "?");
-	}
-	else {
-		int MAJOR = major(procs[index].ttyNr);
-		int MINOR = minor(procs[index].ttyNr);
-		char link_path[MAX];
-		char link[MAX];
-		memset(link_path, 0, MAX);
-		memset(link, 0, MAX);
-		sprintf(link_path, "/dev/char/%d:   -%d", MAJOR, MINOR);
-
-		if(access(link_path, F_OK) != 0) {
-			sprintf(procs[index].TTY, "pts/%d", MINOR);
-		}
-		else {
-			readlink(link_path, link, MAX);
-			strcpy(procs[index].TTY, link +3);
-		}
-	}
-	if(procs[index].PID == mypid) {
-		strcpy(mytty, procs[index].TTY);
-	}
-	*/
 }
 
 

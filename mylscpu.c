@@ -53,6 +53,16 @@ char srbds[MID];
 char tsx_async_abort[MID];
 char flags[LONG];
 
+typedef struct cache {
+	char one_size[30];
+	char all_size[30];
+	char ways[30];
+	char type[30];
+	char level[30];
+} cache;
+
+cache L1d_C, L1i_C, L2_C, L3_C; //C옵션을 추가할 경우
+
 bool op_64, op_32, op_16;
 int core; //cpu 코어 개수
 int siblings; //thread per core를 구하기 위한 값
@@ -99,6 +109,7 @@ void get_cpuinfo() { //proc/cpuinfo에서 정보를 얻는 함수
 	memset(parse, 0, sizeof(parse));
 
 	int fd;//file descriptor
+	if(access(path, F_OK)) return;
 	if((fd = open(path, O_RDONLY)) < 0) {
 		fprintf(stderr, "%s file open error\n", path);
 		exit(1);
@@ -374,99 +385,325 @@ void get_cpus() {
 //L1d, L1i, L2, L3 cache구하기
 void get_cache() {
 	char *L1d_path = "/sys/devices/system/cpu/cpu0/cache/index0/size";
+	char *L1d_way =  "/sys/devices/system/cpu/cpu0/cache/index0/ways_of_associativity";
+	char *L1d_type =  "/sys/devices/system/cpu/cpu0/cache/index0/type";
+	char *L1d_level =  "/sys/devices/system/cpu/cpu0/cache/index0/level";
+
 	char *L1i_path = "/sys/devices/system/cpu/cpu0/cache/index1/size";
+	char *L1i_way =  "/sys/devices/system/cpu/cpu0/cache/index1/ways_of_associativity";
+	char *L1i_type =  "/sys/devices/system/cpu/cpu0/cache/index1/type";
+	char *L1i_level =  "/sys/devices/system/cpu/cpu0/cache/index1/level";
+
 	char *L2_path = "/sys/devices/system/cpu/cpu0/cache/index2/size";
+	char *L2_way =  "/sys/devices/system/cpu/cpu0/cache/index2/ways_of_associativity";
+	char *L2_type =  "/sys/devices/system/cpu/cpu0/cache/index2/type";
+	char *L2_level =  "/sys/devices/system/cpu/cpu0/cache/index2/level";
+
 	char *L3_path = "/sys/devices/system/cpu/cpu0/cache/index3/size";
+	char *L3_way =  "/sys/devices/system/cpu/cpu0/cache/index3/ways_of_associativity";
+	char *L3_type =  "/sys/devices/system/cpu/cpu0/cache/index3/type";
+	char *L3_level =  "/sys/devices/system/cpu/cpu0/cache/index3/level";
 
 	int fd;
 	int rst;
 	char tmp[SHORT];
 
 	//L1d cache 구하기
-	memset(tmp, 0, SHORT);
+	if(access(L1d_path, F_OK) == 0) {
+		memset(tmp, 0, SHORT);
+		if((fd = open(L1d_path, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L1d_path);
+			exit(1);
+		}
+		if(read(fd, tmp, SHORT) == 0) {
+			fprintf(stderr, "%s file read error\n", L1d_path);
+			exit(1);
+		}
+		close(fd);
+		rst = get_value(tmp); //크기에 core를 곱한다.
 
-	if((fd = open(L1d_path, O_RDONLY)) < 0) {
-		fprintf(stderr, "%s file open error\n", L1d_path);
-		exit(1);
-	}
-	if(read(fd, tmp, SHORT) == 0) {
-		fprintf(stderr, "%s file read error\n", L1d_path);
-		exit(1);
-	}
-	close(fd);
-	rst = get_value(tmp) * core; //크기에 core를 곱한다.
+		if(rst < 1024)
+			sprintf(L1d_C.one_size, "%dK", rst);
+		else if(rst < 1024*1024)
+			sprintf(L1d_C.one_size, "%dM", rst / 1024);
+		else
+			sprintf(L1d_C.one_size, "%dG", rst / (1024*1024));
 
-	if(rst < 1024) 
-		sprintf(L1d, "%d KiB", rst);
-	else if(rst < 1024 *1024)
-		sprintf(L1d, "%d MiB", rst / 1024);
-	else
-		sprintf(L1d, "%d GiB", rst / (1024 *1024));
+		if(rst*core < 1024) {
+			sprintf(L1d, "%d KiB", rst*core);
+			sprintf(L1d_C.all_size, "%dK", rst*core);
+		}
+		else if(rst*core < 1024 *1024) {
+			sprintf(L1d, "%d MiB", rst*core / 1024);
+			sprintf(L1d_C.all_size, "%dM", rst*core / 1024);
+		}
+		else {
+			sprintf(L1d, "%d GiB", rst*core / (1024 *1024));
+			sprintf(L1d_C.all_size, "%dG", rst*core / (1024*1024));
+		}
+	}
+
+	if(access(L1d_way, F_OK) == 0) {
+		if((fd = open(L1d_way, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L1d_way);
+			exit(1);
+		}
+		if(read(fd, L1d_C.ways, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L1d_way);
+			exit(1);
+		}
+		close(fd);
+	}
+
+	if(access(L1d_type, F_OK) == 0) {
+		if((fd = open(L1d_type, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L1d_type);
+			exit(1);
+		}
+		if(read(fd, L1d_C.type, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L1d_type);
+			exit(1);
+		}
+		close(fd);
+	}
+
+	if(access(L1d_level, F_OK) == 0) {
+		if((fd = open(L1d_level, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L1d_level);
+			exit(1);
+		}
+		if(read(fd, L1d_C.level, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L1d_level);
+			exit(1);
+		}
+		close(fd);
+	}
+
+
 
 	//L1i cache 구하기
-	memset(tmp, 0, SHORT);
+	if(access(L1i_path, F_OK) == 0) {
+		memset(tmp, 0, SHORT);
 
-	if((fd = open(L1i_path, O_RDONLY)) < 0) {
-		fprintf(stderr, "%s file open error\n", L1i_path);
-		exit(1);
-	}
-	if(read(fd, tmp, SHORT) == 0) {
-		fprintf(stderr, "%s file read error\n", L1i_path);
-		exit(1);
-	}
-	close(fd);
-	rst = get_value(tmp) * core; //크기에 core를 곱한다.
+		if((fd = open(L1i_path, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L1i_path);
+			exit(1);
+		}
+		if(read(fd, tmp, SHORT) == 0) {
+			fprintf(stderr, "%s file read error\n", L1i_path);
+			exit(1);
+		}
+		close(fd);
+		rst = get_value(tmp); //크기를 숫자로 바꾼다
+		
+		if(rst < 1024)
+			sprintf(L1i_C.one_size, "%dK", rst);
+		else if(rst < 1024*1024)
+			sprintf(L1i_C.one_size, "%dM", rst / 1024);
+		else
+			sprintf(L1i_C.one_size, "%dG", rst / (1024*1024));
 
-	if(rst < 1024) 
-		sprintf(L1i, "%d KiB", rst);
-	else if(rst < 1024 *1024)
-		sprintf(L1i, "%d MiB", rst / 1024);
-	else
-		sprintf(L1i, "%d GiB", rst / (1024*1024));
+		if(rst*core < 1024) {
+			sprintf(L1i, "%d KiB", rst*core);
+			sprintf(L1i_C.all_size, "%dK", rst*core);
+		}
+		else if(rst*core < 1024 *1024) {
+			sprintf(L1i, "%d MiB", rst*core / 1024);
+			sprintf(L1i_C.all_size, "%dM", rst*core / 1024);
+		}
+		else {
+			sprintf(L1i, "%d GiB", rst*core / (1024 *1024));
+			sprintf(L1i_C.all_size, "%dG", rst*core / (1024*1024));
+		}
+	}
+
+
+	if(access(L1i_way, F_OK) == 0) {
+		if((fd = open(L1i_way, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L1i_way);
+			exit(1);
+		}
+		if(read(fd, L1i_C.ways, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L1i_way);
+			exit(1);
+		}
+		close(fd);
+	}
+
+	if(access(L1i_type, F_OK) == 0) {
+		if((fd = open(L1i_type, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L1i_type);
+			exit(1);
+		}
+		if(read(fd, L1i_C.type, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L1i_type);
+			exit(1);
+		}
+		close(fd);
+	}
+
+	if(access(L1i_level, F_OK) == 0) {
+		if((fd = open(L1i_level, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L1i_level);
+			exit(1);
+		}
+		if(read(fd, L1i_C.level, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L1i_level);
+			exit(1);
+		}
+		close(fd);
+	}
 
 
 	//L2 cache 구하기
-	memset(tmp, 0, SHORT);
+	if(access(L2_path, F_OK) == 0) {
+		memset(tmp, 0, SHORT);
 
-	if((fd = open(L2_path, O_RDONLY)) < 0) {
-		fprintf(stderr, "%s file open error\n", L2_path);
-		exit(1);
-	}
-	if(read(fd, tmp, SHORT) == 0) {
-		fprintf(stderr, "%s file read error\n", L2_path);
-		exit(1);
-	}
-	close(fd);
-	rst = get_value(tmp) * core; //크기에 core를 곱한다.
+		if((fd = open(L2_path, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L2_path);
+			exit(1);
+		}
+		if(read(fd, tmp, SHORT) == 0) {
+			fprintf(stderr, "%s file read error\n", L2_path);
+			exit(1);
+		}
+		close(fd);
+		rst = get_value(tmp); //크기에 core를 곱한다.
+		
+		if(rst < 1024)
+			sprintf(L2_C.one_size, "%dK", rst);
+		else if(rst < 1024*1024)
+			sprintf(L2_C.one_size, "%dM", rst / 1024);
+		else
+			sprintf(L2_C.one_size, "%dG", rst / (1024*1024));
 
-	if(rst < 1024) 
-		sprintf(L2, "%d KiB", rst);
-	else if(rst < 1024 *1024)
-		sprintf(L2, "%d MiB", rst / 1024);
-	else
-		sprintf(L2, "%d GiB", rst / (1024*1024));
+		if(rst*core < 1024) {
+			sprintf(L2, "%d KiB", rst*core);
+			sprintf(L2_C.all_size, "%dK", rst*core);
+		}
+		else if(rst*core < 1024 *1024) {
+			sprintf(L2, "%d MiB", rst*core / 1024);
+			sprintf(L2_C.all_size, "%dM", rst*core / 1024);
+		}
+		else {
+			sprintf(L2, "%d GiB", rst*core / (1024 *1024));
+			sprintf(L2_C.all_size, "%dG", rst*core / (1024*1024));
+		}
+
+	}
+
+
+	if(access(L2_way, F_OK) == 0) {
+		if((fd = open(L2_way, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L2_way);
+			exit(1);
+		}
+		if(read(fd, L2_C.ways, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L2_way);
+			exit(1);
+		}
+		close(fd);
+	}
+
+	if(access(L2_type, F_OK) == 0) {
+		if((fd = open(L2_type, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L2_type);
+			exit(1);
+		}
+		if(read(fd, L2_C.type, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L2_type);
+			exit(1);
+		}
+		close(fd);
+	}
+
+	if(access(L2_level, F_OK) == 0) {
+		if((fd = open(L2_level, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L2_level);
+			exit(1);
+		}
+		if(read(fd, L2_C.level, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L2_level);
+			exit(1);
+		}
+		close(fd);
+	}
+
 
 
 	//L3 cache 구하기
-	memset(tmp, 0, SHORT);
+	if(access(L3_path, F_OK) == 0) {
+		memset(tmp, 0, SHORT);
 
-	if((fd = open(L3_path, O_RDONLY)) < 0) {
-		fprintf(stderr, "%s file open error\n", L3_path);
-		exit(1);
-	}
-	if(read(fd, tmp, SHORT) == 0) {
-		fprintf(stderr, "%s file read error\n", L3_path);
-		exit(1);
-	}
-	close(fd);
-	rst = get_value(tmp); //크기에 core를 곱한다.
+		if((fd = open(L3_path, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L3_path);
+			exit(1);
+		}
+		if(read(fd, tmp, SHORT) == 0) {
+			fprintf(stderr, "%s file read error\n", L3_path);
+			exit(1);
+		}
+		close(fd);
+		rst = get_value(tmp); //크기에 core를 곱한다.
+	
+		if(rst < 1024)
+			sprintf(L3_C.one_size, "%dK", rst);
+		else if(rst < 1024*1024)
+			sprintf(L3_C.one_size, "%dM", rst / 1024);
+		else
+			sprintf(L3_C.one_size, "%dG", rst / (1024*1024));
 
-	if(rst < 1024) 
-		sprintf(L3, "%d KiB", rst);
-	else if(rst < 1024 *1024)
-		sprintf(L3, "%d MiB", rst / 1024);
-	else
-		sprintf(L3, "%d GiB", rst / (1024*1024));
+		if(rst < 1024) {
+			sprintf(L3, "%d KiB", rst);
+			sprintf(L3_C.all_size, "%dK", rst);
+		}
+		else if(rst < 1024 *1024) {
+			sprintf(L3, "%d MiB", rst / 1024);
+			sprintf(L3_C.all_size, "%dM", rst / 1024);
+		}
+		else {
+			sprintf(L3, "%d GiB", rst / (1024 *1024));
+			sprintf(L3_C.all_size, "%dG", rst / (1024*1024));
+		}
+	}
+
+	if(access(L3_way, F_OK) == 0) {
+		if((fd = open(L3_way, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L3_way);
+			exit(1);
+		}
+		if(read(fd, L3_C.ways, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L3_way);
+			exit(1);
+		}
+		close(fd);
+	}
+
+	if(access(L3_type, F_OK) == 0) {
+		if((fd = open(L3_type, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L3_type);
+			exit(1);
+		}
+		if(read(fd, L3_C.type, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L3_type);
+			exit(1);
+		}
+		close(fd);
+	}
+
+	if(access(L3_level, F_OK) == 0) {
+		if((fd = open(L3_level, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", L3_level);
+			exit(1);
+		}
+		if(read(fd, L3_C.level, 30) == 0) {
+			fprintf(stderr, "%s file read error\n", L3_level);
+			exit(1);
+		}
+		close(fd);
+	}
+
+
 }
 
 //online cpu 얻기
@@ -524,6 +761,7 @@ void get_NUMA() {
 	DIR *dir;
 	struct dirent *dp;
 	int fd;
+	if(access(path, F_OK)) return;
 	if((dir = opendir(path)) == NULL) {
 		fprintf(stderr, "%s directory open error\n", path);
 		exit(1);
@@ -554,6 +792,7 @@ void get_NUMA() {
 void get_arch() {
 	DIR *dir;
 	struct dirent *dp;
+	if(access("/lib", F_OK)) return;
 	if((dir = opendir("/lib")) == NULL) {
 		fprintf(stderr, "/lib directory open error\n");
 		exit(1);
@@ -624,8 +863,10 @@ void print() {
 	printf("%-33s", "Socket(s):");
 	printf("%d\n", socket);
 
-	printf("%-33s", "NUMA node(s):");
-	printf("%d\n", NUMA_node);
+	if(NUMA_node) {
+		printf("%-33s", "NUMA node(s):");
+		printf("%d\n", NUMA_node);
+	}
 
 	if(strlen(vendor_id)) {
 		printf("%-33s", "Vendor ID:");
@@ -711,8 +952,10 @@ void print() {
 				}
 				if(itlb_multihit[start] != '\0')
 					printf("%33s", " ");
-				else
+				else {
+					printf("\n");
 					break;
+				}
 			}
 		}
 		else {
@@ -730,8 +973,10 @@ void print() {
 				}
 				if(l1tf[start] != '\0')
 					printf("%33s", " ");
-				else
+				else {
+					printf("\n");
 					break;
+				}
 			}
 		}
 		else {
@@ -749,8 +994,10 @@ void print() {
 				}
 				if(mds[start] != '\0')
 					printf("%33s", " ");
-				else
+				else {
+					printf("\n");
 					break;
+				}
 			}
 		}
 		else {
@@ -768,8 +1015,10 @@ void print() {
 				}
 				if(meltdown[start] != '\0')
 					printf("%33s", " ");
-				else
+				else {
+					printf("\n");
 					break;
+				}
 			}
 		}
 		else {
@@ -787,8 +1036,10 @@ void print() {
 				}
 				if(spec_store_bypass[start] != '\0')
 					printf("%33s", " ");
-				else
+				else {
+					printf("\n");
 					break;
+				}
 			}
 		}
 		else {
@@ -806,8 +1057,10 @@ void print() {
 				}
 				if(spectre_v1[start] != '\0')
 					printf("%33s", " ");
-				else
+				else {
+					printf("\n");
 					break;
+				}
 			}
 		}
 		else {
@@ -825,8 +1078,10 @@ void print() {
 				}
 				if(spectre_v2[start] != '\0')
 					printf("%33s", " ");
-				else
+				else {
+					printf("\n");
 					break;
+				}
 			}
 		}
 		else {
@@ -844,8 +1099,10 @@ void print() {
 				}
 				if(srbds[start] != '\0')
 					printf("%33s", " ");
-				else
+				else {
+					printf("\n");
 					break;
+				}
 			}
 		}
 		else {
@@ -863,8 +1120,10 @@ void print() {
 				}
 				if(tsx_async_abort[start] != '\0')
 					printf("%33s", " ");
-				else
+				else {
+					printf("\n");
 					break;
+				}
 			}
 		}
 		else {
@@ -894,7 +1153,17 @@ void print() {
 		}
 	}
 }
-int main() {
+
+void print2() {
+	printf("NAME ONE-SIZE ALL-SIZE WAYS TYPE        LEVEL\n");
+	printf("L1d  %8s %8s %4s %-12s %4s\n", L1d_C.one_size, L1d_C.all_size, L1d_C.ways, L1d_C.type, L1d_C.level);
+	printf("L1i  %8s %8s %4s %-12s %4s\n", L1i_C.one_size, L1i_C.all_size, L1i_C.ways, L1i_C.type, L1i_C.level);
+	printf("L2   %8s %8s %4s %-12s %4s\n", L2_C.one_size, L2_C.all_size, L2_C.ways, L2_C.type, L2_C.level);
+	printf("L3   %8s %8s %4s %-12s %4s\n", L3_C.one_size, L3_C.all_size, L3_C.ways, L3_C.type, L3_C.level);
+
+}
+
+int main(int argc, char **argv) {
 	socket = 1;
 
 	get_cpuinfo();
@@ -939,6 +1208,29 @@ int main() {
 	delete_n(tsx_async_abort);
 	delete_n(flags);
 
+	delete_n(L1d_C.one_size);
+	delete_n(L1d_C.ways);
+	delete_n(L1d_C.type);
+	delete_n(L1d_C.level);
+
+	delete_n(L1i_C.one_size);
+	delete_n(L1i_C.ways);
+	delete_n(L1i_C.type);
+	delete_n(L1i_C.level);
+
+	delete_n(L2_C.one_size);
+	delete_n(L2_C.ways);
+	delete_n(L2_C.type);
+	delete_n(L2_C.level);
+
+	delete_n(L3_C.one_size);
+	delete_n(L3_C.ways);
+	delete_n(L3_C.type);
+	delete_n(L3_C.level);
+
+
+
+
 	//앞에 불필요한 공백 지우기
 	delete_blank(architecture);
 	delete_blank(op_mode);
@@ -969,5 +1261,32 @@ int main() {
 	delete_blank(srbds);
 	delete_blank(tsx_async_abort);
 	delete_blank(flags);
-	print();
+
+	delete_blank(L1d_C.one_size);
+	delete_blank(L1d_C.ways);
+	delete_blank(L1d_C.type);
+	delete_blank(L1d_C.level);
+
+	delete_blank(L1i_C.one_size);
+	delete_blank(L1i_C.ways);
+	delete_blank(L1i_C.type);
+	delete_blank(L1i_C.level);
+
+	delete_blank(L2_C.one_size);
+	delete_blank(L2_C.ways);
+	delete_blank(L2_C.type);
+	delete_blank(L2_C.level);
+
+	delete_blank(L3_C.one_size);
+	delete_blank(L3_C.ways);
+	delete_blank(L3_C.type);
+	delete_blank(L3_C.level);
+
+
+
+	if(argc == 1)
+		print();
+	else if(argc == 2 && !strcmp(argv[1], "-C")) {
+		print2();
+	}
 }
