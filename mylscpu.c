@@ -237,103 +237,120 @@ void get_vulnerability() { //sys/devices/system/cpu/vulnerabilities 디렉토리
 	int fd; //file descriptor
 
 	//Itlb multihit를 읽어옴
-	if((fd = open(itlb_multihit_path, O_RDONLY)) <0) {
-		fprintf(stderr, "%s file open error\n", itlb_multihit_path);
-		exit(1);
+	if(access(itlb_multihit_path, F_OK) == 0) {
+		if((fd = open(itlb_multihit_path, O_RDONLY)) <0) {
+			fprintf(stderr, "%s file open error\n", itlb_multihit_path);
+			exit(1);
+		}
+		if(read(fd, itlb_multihit, MID) == 0) {
+			fprintf(stderr, "%s file read error\n", itlb_multihit_path);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, itlb_multihit, MID) == 0) {
-		fprintf(stderr, "%s file read error\n", itlb_multihit_path);
-		exit(1);
-	}
-	close(fd);
 
 	//l1tf를 읽어옴
-	if((fd = open(l1tf_path, O_RDONLY)) <0) {
-		fprintf(stderr, "%s file open error\n", l1tf_path);
-		exit(1);
+	if(access(l1tf_path, F_OK) == 0) {
+		if((fd = open(l1tf_path, O_RDONLY)) <0) {
+			fprintf(stderr, "%s file open error\n", l1tf_path);
+			exit(1);
+		}
+		if(read(fd, l1tf, MID) == 0) {
+			fprintf(stderr, "%s file read error\n", l1tf_path);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, l1tf, MID) == 0) {
-		fprintf(stderr, "%s file read error\n", l1tf_path);
-		exit(1);
-	}
-	close(fd);
 
 	//Mds를 읽어옴
-	if((fd = open(mds_path, O_RDONLY)) <0) {
-		fprintf(stderr, "%s file open error\n", mds_path);
-		exit(1);
+	if(access(mds_path, F_OK) == 0) {
+		if((fd = open(mds_path, O_RDONLY)) <0) {
+			fprintf(stderr, "%s file open error\n", mds_path);
+			exit(1);
+		}
+		if(read(fd, mds, MID) == 0) {
+			fprintf(stderr, "%s file read error\n", mds_path);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, mds, MID) == 0) {
-		fprintf(stderr, "%s file read error\n", mds_path);
-		exit(1);
-	}
-	close(fd);
 
 	//Meltdown을 읽어옴
-	if((fd = open(meltdown_path, O_RDONLY)) <0) {
-		fprintf(stderr, "%s file open error\n", meltdown_path);
-		exit(1);
+	if(access(meltdown_path, F_OK) == 0) {
+		if((fd = open(meltdown_path, O_RDONLY)) <0) {
+			fprintf(stderr, "%s file open error\n", meltdown_path);
+			exit(1);
+		}
+		if(read(fd, meltdown, MID) == 0) {
+			fprintf(stderr, "%s file read error\n", meltdown_path);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, meltdown, MID) == 0) {
-		fprintf(stderr, "%s file read error\n", meltdown_path);
-		exit(1);
-	}
-	close(fd);
 
 	//spec store bypass를 읽어옴
-	if((fd = open(bypass_path, O_RDONLY)) <0) {
-		fprintf(stderr, "%s file open error\n", bypass_path);
-		exit(1);
+	if(access(bypass_path, F_OK) == 0) {
+		if((fd = open(bypass_path, O_RDONLY)) <0) {
+			fprintf(stderr, "%s file open error\n", bypass_path);
+			exit(1);
+		}
+		if(read(fd, spec_store_bypass, MID) == 0) {
+			fprintf(stderr, "%s 옴file read error\n", bypass_path);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, spec_store_bypass, MID) == 0) {
-		fprintf(stderr, "%s 옴file read error\n", bypass_path);
-		exit(1);
-	}
-	close(fd);
 
 	//spectre v1을 읽어옴
-	if((fd = open(spectre_v1_path, O_RDONLY)) <0) {
-		fprintf(stderr, "%s file open error\n", spectre_v1_path);
-		exit(1);
+	if(access(spectre_v1_path, F_OK) == 0) {
+		if((fd = open(spectre_v1_path, O_RDONLY)) <0) {
+			fprintf(stderr, "%s file open error\n", spectre_v1_path);
+			exit(1);
+		}
+		if(read(fd, spectre_v1, MID) == 0) {
+			fprintf(stderr, "%s file read error\n", spectre_v1_path);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, spectre_v1, MID) == 0) {
-		fprintf(stderr, "%s file read error\n", spectre_v1_path);
-		exit(1);
-	}
-	close(fd);
 
 	//spectre v2를 읽어옴
-	if((fd = open(spectre_v2_path, O_RDONLY)) <0) {
-		fprintf(stderr, "%s file open error\n", spectre_v2_path);
-		exit(1);
+	if(access(spectre_v2_path, F_OK) == 0) {
+		if((fd = open(spectre_v2_path, O_RDONLY)) <0) {
+			fprintf(stderr, "%s file open error\n", spectre_v2_path);
+			exit(1);
+		}
+		if(read(fd, spectre_v2, MID) == 0) {
+			fprintf(stderr, "%s file read error\n", spectre_v2_path);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, spectre_v2, MID) == 0) {
-		fprintf(stderr, "%s file read error\n", spectre_v2_path);
-		exit(1);
-	}
-	close(fd);
-
 	//Srbds를 읽어옴
-	if((fd = open(srbds_path, O_RDONLY)) <0) {
-		fprintf(stderr, "%s file open error\n", srbds_path);
-		exit(1);
+	if(access(srbds_path, F_OK) == 0) {
+		if((fd = open(srbds_path, O_RDONLY)) <0) {
+			fprintf(stderr, "%s file open error\n", srbds_path);
+			exit(1);
+		}
+		if(read(fd, srbds, MID) == 0) {
+			fprintf(stderr, "%s file read error\n", srbds_path);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, srbds, MID) == 0) {
-		fprintf(stderr, "%s file read error\n", srbds_path);
-		exit(1);
-	}
-	close(fd);
 
 	//Tsx async abort를 읽어
-	if((fd = open(tsx_path, O_RDONLY)) <0) {
-		fprintf(stderr, "%s file open error\n", tsx_path);
-		exit(1);
+	if(access(tsx_path, F_OK) == 0) {
+		if((fd = open(tsx_path, O_RDONLY)) <0) {
+			fprintf(stderr, "%s file open error\n", tsx_path);
+			exit(1);
+		}
+		if(read(fd, tsx_async_abort, MID) == 0) {
+			fprintf(stderr, "%s file read error\n", tsx_path);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, tsx_async_abort, MID) == 0) {
-		fprintf(stderr, "%s file read error\n", tsx_path);
-		exit(1);
-	}
-	close(fd);
 }
 
 //cpu 개수 구하기
@@ -456,15 +473,17 @@ void get_cache() {
 void get_online() {
 	char *path = "/sys/devices/system/cpu/online";
 	int fd = 0;
-	if((fd = open(path, O_RDONLY)) < 0) {
-		fprintf(stderr, "%s file open error\n", path);
-		exit(1);
+	if(access(path, F_OK) == 0) {
+		if((fd = open(path, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", path);
+			exit(1);
+		}
+		if(read(fd, online_cpu, SHORT) == 0) {
+			fprintf(stderr, "%s file open error\n", path);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, online_cpu, SHORT) == 0) {
-		fprintf(stderr, "%s file open error\n", path);
-		exit(1);
-	}
-	close(fd);
 }
 
 //cpu max/min Mhz 얻기
@@ -473,25 +492,29 @@ void get_Mhz() {
 	char *minpath = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq";
 
 	int fd;
-	if((fd = open(maxpath, O_RDONLY)) < 0) {
-		fprintf(stderr, "%s file open error\n", maxpath);
-		exit(1);
+	if(access(maxpath, F_OK) == 0) {
+		if((fd = open(maxpath, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", maxpath);
+			exit(1);
+		}
+		if(read(fd, max_mhz, SHORT) == 0) {
+			fprintf(stderr, "%s file open error\n", maxpath);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, max_mhz, SHORT) == 0) {
-		fprintf(stderr, "%s file open error\n", maxpath);
-		exit(1);
-	}
-	close(fd);
 
-	if((fd = open(minpath, O_RDONLY)) < 0) {
-		fprintf(stderr, "%s file open error\n", minpath);
-		exit(1);
+	if(access(minpath, F_OK) == 0) {
+		if((fd = open(minpath, O_RDONLY)) < 0) {
+			fprintf(stderr, "%s file open error\n", minpath);
+			exit(1);
+		}
+		if(read(fd, min_mhz, SHORT) == 0) {
+			fprintf(stderr, "%s file open error\n", minpath);
+			exit(1);
+		}
+		close(fd);
 	}
-	if(read(fd, min_mhz, SHORT) == 0) {
-		fprintf(stderr, "%s file open error\n", minpath);
-		exit(1);
-	}
-	close(fd);
 }
 
 //NUMA node 정보 얻기
@@ -564,23 +587,33 @@ void print() {
 		exit(1);
 	}
 
-	printf("%-33s", "Architecture:");
-	printf("%s\n", architecture);
+	if(strlen(architecture)) {
+		printf("%-33s", "Architecture:");
+		printf("%s\n", architecture);
+	}
 
-	printf("%-33s", "CPU op-mode(s):");
-	printf("%s\n", op_mode);
+	if(strlen(op_mode)) {
+		printf("%-33s", "CPU op-mode(s):");
+		printf("%s\n", op_mode);
+	}
 
-	printf("%-33s", "Byte Order:");
-	printf("%s\n", byte_order);
+	if(strlen(byte_order)) {
+		printf("%-33s", "Byte Order:");
+		printf("%s\n", byte_order);
+	}
 
-	printf("%-33s", "Address sizes:");
-	printf("%s\n", address_size);
+	if(strlen(address_size)) {
+		printf("%-33s", "Address sizes:");
+		printf("%s\n", address_size);
+	}
 
 	printf("%-33s", "CPU(s):");
 	printf("%d\n", cpu);
 
-	printf("%-33s", "On-line CPU(s) list:");
-	printf("%s\n", online_cpu);
+	if(strlen(online_cpu)) {
+		printf("%-33s", "On-line CPU(s) list:");
+		printf("%s\n", online_cpu);
+	}
 
 	printf("%-33s", "Thread(s) per core:");
 	printf("%d\n", thread_per_core);
@@ -594,47 +627,71 @@ void print() {
 	printf("%-33s", "NUMA node(s):");
 	printf("%d\n", NUMA_node);
 
-	printf("%-33s", "Vendor ID:");
-	printf("%s\n", vendor_id);
+	if(strlen(vendor_id)) {
+		printf("%-33s", "Vendor ID:");
+		printf("%s\n", vendor_id);
+	}
 
 	printf("%-33s", "CPU family:");
 	printf("%d\n", cpu_family);
 
-	printf("%-33s", "Model:");
-	printf("%s\n", model);
+	if(strlen(model)) {
+		printf("%-33s", "Model:");
+		printf("%s\n", model);
+	}
 
-	printf("%-33s", "Model name:");
-	printf("%s\n", model_name);
+	if(strlen(model_name)) {
+		printf("%-33s", "Model name:");
+		printf("%s\n", model_name);
+	}
 
 	printf("%-33s", "Stepping:");
 	printf("%d\n", stepping);
 
-	printf("%-33s", "CPU MHz:");
-	printf("%s\n", mhz);
+	if(strlen(mhz)) {
+		printf("%-33s", "CPU MHz:");
+		printf("%s\n", mhz);
+	}
 
-	printf("%-33s", "CPU max MHz:");
-	printf("%s\n", max_mhz);
+	if(strlen(max_mhz)) {
+		printf("%-33s", "CPU max MHz:");
+		printf("%s\n", max_mhz);
+	}
 
-	printf("%-33s", "CPU min MHz:");
-	printf("%s\n", min_mhz);
+	if(strlen(min_mhz)) {
+		printf("%-33s", "CPU min MHz:");
+		printf("%s\n", min_mhz);
+	}
 
-	printf("%-33s", "BogoMIPS:");
-	printf("%s\n", bogomips);
+	if(strlen(bogomips)) {
+		printf("%-33s", "BogoMIPS:");
+		printf("%s\n", bogomips);
+	}
 
-	printf("%-33s", "Virtualization:");
-	printf("%s\n", virtualization);
+	if(strlen(virtualization)) {
+		printf("%-33s", "Virtualization:");
+		printf("%s\n", virtualization);
+	}
 
-	printf("%-33s", "L1d cache:");
-	printf("%s\n", L1d);
+	if(strlen(L1d)) {
+		printf("%-33s", "L1d cache:");
+		printf("%s\n", L1d);
+	}
 
-	printf("%-33s", "L1i cache:");
-	printf("%s\n", L1i);
+	if(strlen(L1i)) {
+		printf("%-33s", "L1i cache:");
+		printf("%s\n", L1i);
+	}
 
-	printf("%-33s", "L2 cache:");
-	printf("%s\n", L2);
+	if(strlen(L2)) {
+		printf("%-33s", "L2 cache:");
+		printf("%s\n", L2);
+	}
 
-	printf("%-33s", "L3 cache:");
-	printf("%s\n", L3);
+	if(strlen(L3)) {
+		printf("%-33s", "L3 cache:");
+		printf("%s\n", L3);
+	}
 
 	for(int i = 0; i < NUMA_node; i++) {
 		char tmp[SHORT];
@@ -644,177 +701,197 @@ void print() {
 		printf("%s\n", NUMA_nodes[i]);
 	}
 
-	start = 0;
-	printf("%-33s", "Vulnerability Itlb multihit:");
-	if(strlen(itlb_multihit) > win.ws_col - len) {
-		while(true) {
-			for(int i = 0; i < win.ws_col-len; i++) {
-				putc(itlb_multihit[start++], stdout);
+	if(strlen(itlb_multihit)) {
+		start = 0;
+		printf("%-33s", "Vulnerability Itlb multihit:");
+		if(strlen(itlb_multihit) > win.ws_col - len) {
+			while(true) {
+				for(int i = 0; i < win.ws_col-len; i++) {
+					putc(itlb_multihit[start++], stdout);
+				}
+				if(itlb_multihit[start] != '\0')
+					printf("%33s", " ");
+				else
+					break;
 			}
-			if(itlb_multihit[start] != '\0')
-				printf("%33s", " ");
-			else
-				break;
 		}
-	}
-	else {
-		printf("%s\n", itlb_multihit);
+		else {
+			printf("%s\n", itlb_multihit);
+		}
 	}
 
-	start = 0;
-	printf("%-33s", "Vulnerability L1tf:");
-	if(strlen(l1tf) > win.ws_col - len) {
-		while(true) {
-			for(int i = 0; i < win.ws_col-len; i++) {
-				putc(l1tf[start++], stdout);
+	if(strlen(l1tf)) {
+		start = 0;
+		printf("%-33s", "Vulnerability L1tf:");
+		if(strlen(l1tf) > win.ws_col - len) {
+			while(true) {
+				for(int i = 0; i < win.ws_col-len; i++) {
+					putc(l1tf[start++], stdout);
+				}
+				if(l1tf[start] != '\0')
+					printf("%33s", " ");
+				else
+					break;
 			}
-			if(l1tf[start] != '\0')
-				printf("%33s", " ");
-			else
-				break;
 		}
-	}
-	else {
-		printf("%s\n", l1tf);
+		else {
+			printf("%s\n", l1tf);
+		}
 	}
 
-	start = 0;
-	printf("%-33s", "Vulnerability Mds:");
-	if(strlen(mds) > win.ws_col - len) {
-		while(true) {
-			for(int i = 0; i < win.ws_col-len; i++) {
-				putc(mds[start++], stdout);
+	if(strlen(mds)) {
+		start = 0;
+		printf("%-33s", "Vulnerability Mds:");
+		if(strlen(mds) > win.ws_col - len) {
+			while(true) {
+				for(int i = 0; i < win.ws_col-len; i++) {
+					putc(mds[start++], stdout);
+				}
+				if(mds[start] != '\0')
+					printf("%33s", " ");
+				else
+					break;
 			}
-			if(mds[start] != '\0')
-				printf("%33s", " ");
-			else
-				break;
 		}
-	}
-	else {
-		printf("%s\n", mds);
+		else {
+			printf("%s\n", mds);
+		}
 	}
 
-	start = 0;
-	printf("%-33s", "Vulnerability Meltdown:");
-	if(strlen(meltdown) > win.ws_col - len) {
-		while(true) {
-			for(int i = 0; i < win.ws_col-len; i++) {
-				putc(meltdown[start++], stdout);
+	if(strlen(meltdown)) {
+		start = 0;
+		printf("%-33s", "Vulnerability Meltdown:");
+		if(strlen(meltdown) > win.ws_col - len) {
+			while(true) {
+				for(int i = 0; i < win.ws_col-len; i++) {
+					putc(meltdown[start++], stdout);
+				}
+				if(meltdown[start] != '\0')
+					printf("%33s", " ");
+				else
+					break;
 			}
-			if(meltdown[start] != '\0')
-				printf("%33s", " ");
-			else
-				break;
 		}
-	}
-	else {
-		printf("%s\n", meltdown);
+		else {
+			printf("%s\n", meltdown);
+		}
 	}
 
-	start = 0;
-	printf("%-33s", "Vulnerability Spec store bypass:");
-	if(strlen(spec_store_bypass) > win.ws_col - len) {
-		while(true) {
-			for(int i = 0; i < win.ws_col-len; i++) {
-				putc(spec_store_bypass[start++], stdout);
+	if(strlen(spec_store_bypass)) {
+		start = 0;
+		printf("%-33s", "Vulnerability Spec store bypass:");
+		if(strlen(spec_store_bypass) > win.ws_col - len) {
+			while(true) {
+				for(int i = 0; i < win.ws_col-len; i++) {
+					putc(spec_store_bypass[start++], stdout);
+				}
+				if(spec_store_bypass[start] != '\0')
+					printf("%33s", " ");
+				else
+					break;
 			}
-			if(spec_store_bypass[start] != '\0')
-				printf("%33s", " ");
-			else
-				break;
 		}
-	}
-	else {
-		printf("%s\n", spec_store_bypass);
+		else {
+			printf("%s\n", spec_store_bypass);
+		}
 	}
 
-	start = 0;
-	printf("%-33s", "Vulnerability Spectre v1:");
-	if(strlen(spectre_v1) > win.ws_col - len) {
-		while(true) {
-			for(int i = 0; i < win.ws_col-len; i++) {
-				putc(spectre_v1[start++], stdout);
+	if(strlen(spectre_v1)) {
+		start = 0;
+		printf("%-33s", "Vulnerability Spectre v1:");
+		if(strlen(spectre_v1) > win.ws_col - len) {
+			while(true) {
+				for(int i = 0; i < win.ws_col-len; i++) {
+					putc(spectre_v1[start++], stdout);
+				}
+				if(spectre_v1[start] != '\0')
+					printf("%33s", " ");
+				else
+					break;
 			}
-			if(spectre_v1[start] != '\0')
-				printf("%33s", " ");
-			else
-				break;
 		}
-	}
-	else {
-		printf("%s\n", spectre_v1);
+		else {
+			printf("%s\n", spectre_v1);
+		}
 	}
 
-	start = 0;
-	printf("%-33s", "Vulnerability Spectre v2:");
-	if(strlen(spectre_v2) > win.ws_col - len) {
-		while(true) {
-			for(int i = 0; i < win.ws_col-len; i++) {
-				putc(spectre_v2[start++], stdout);
+	if(strlen(spectre_v2)) {
+		start = 0;
+		printf("%-33s", "Vulnerability Spectre v2:");
+		if(strlen(spectre_v2) > win.ws_col - len) {
+			while(true) {
+				for(int i = 0; i < win.ws_col-len; i++) {
+					putc(spectre_v2[start++], stdout);
+				}
+				if(spectre_v2[start] != '\0')
+					printf("%33s", " ");
+				else
+					break;
 			}
-			if(spectre_v2[start] != '\0')
-				printf("%33s", " ");
-			else
-				break;
 		}
-	}
-	else {
-		printf("%s\n", spectre_v2);
+		else {
+			printf("%s\n", spectre_v2);
+		}
 	}
 
-	start = 0;
-	printf("%-33s", "Vulnerability Srbds:");
-	if(strlen(srbds) > win.ws_col - len) {
-		while(true) {
-			for(int i = 0; i < win.ws_col-len; i++) {
-				putc(srbds[start++], stdout);
+	if(strlen(srbds)) {
+		start = 0;
+		printf("%-33s", "Vulnerability Srbds:");
+		if(strlen(srbds) > win.ws_col - len) {
+			while(true) {
+				for(int i = 0; i < win.ws_col-len; i++) {
+					putc(srbds[start++], stdout);
+				}
+				if(srbds[start] != '\0')
+					printf("%33s", " ");
+				else
+					break;
 			}
-			if(srbds[start] != '\0')
-				printf("%33s", " ");
-			else
-				break;
 		}
-	}
-	else {
-		printf("%s\n", srbds);
+		else {
+			printf("%s\n", srbds);
+		}
 	}
 
-	start = 0;
-	printf("%-33s", "Vulnerability Tsx async abort:");
-	if(strlen(tsx_async_abort) > win.ws_col - len) {
-		while(true) {
-			for(int i = 0; i < win.ws_col-len; i++) {
-				putc(tsx_async_abort[start++], stdout);
+	if(strlen(tsx_async_abort)) {
+		start = 0;
+		printf("%-33s", "Vulnerability Tsx async abort:");
+		if(strlen(tsx_async_abort) > win.ws_col - len) {
+			while(true) {
+				for(int i = 0; i < win.ws_col-len; i++) {
+					putc(tsx_async_abort[start++], stdout);
+				}
+				if(tsx_async_abort[start] != '\0')
+					printf("%33s", " ");
+				else
+					break;
 			}
-			if(tsx_async_abort[start] != '\0')
-				printf("%33s", " ");
-			else
-				break;
 		}
-	}
-	else {
-		printf("%s\n", tsx_async_abort);
+		else {
+			printf("%s\n", tsx_async_abort);
+		}
 	}
 
-	start = 0;
-	printf("%-33s", "Flags:");
-	if(strlen(flags) > win.ws_col - len) {
-		while(true) {
-			for(int i = 0; i < win.ws_col-len; i++) {
-				putc(flags[start++], stdout);
-			}
-			if(flags[start] != '\0') {
-				printf("%33s", " ");
-			}
-			else {
-				printf("\n");
-				break;
+	if(strlen(flags)) {
+		start = 0;
+		printf("%-33s", "Flags:");
+		if(strlen(flags) > win.ws_col - len) {
+			while(true) {
+				for(int i = 0; i < win.ws_col-len; i++) {
+					putc(flags[start++], stdout);
+				}
+				if(flags[start] != '\0') {
+					printf("%33s", " ");
+				}
+				else {
+					printf("\n");
+					break;
+				}
 			}
 		}
-	}
-	else {
-		printf("%s\n", flags);
+		else {
+			printf("%s\n", flags);
+		}
 	}
 }
 int main() {
