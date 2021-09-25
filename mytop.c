@@ -36,7 +36,7 @@ int start_row = 0, start_col = 0;
 int begin[MAX] = {0, 8, 17, 21, 25, 33, 40, 47, 48, 53, 59, 69};
 int option; //정렬 옵션
 int uptime_line; //uptime_line 표시 여부
-double delay; //refresh 초단위
+int delay; //refresh 초단위
 int option_c; //명령 인자 표시/ 비표시
 char string[MAX];
 int option_i; //유휴 프로세스 표시하지 않는 옵션
@@ -53,10 +53,13 @@ int option_b; //나열모드 옵션
 int special_user; //특정 user만 출력하는 경우 user의 수
 char users[MAX]; //출력 user 넣는 함수
 char blank[MAX];
+char blank2[MAX];
 int kill_pid; //signal을 보낼 pid
 //cpu읽은 정보
 int current_cpu[9];
 int before_cpu[9];
+
+struct winsize win;
 
 
 typedef struct {
@@ -109,6 +112,7 @@ void handler(int signo) { //SIGALRM 핸들러 함수
 	print_row = 0;
 	erase();
 	get_data();
+	//printf("%d\n", delay);
 	if(option == 'P')
 		sort_by_cpu();
 	else if(option == 'T')
@@ -123,6 +127,16 @@ void handler(int signo) { //SIGALRM 핸들러 함수
 		print_2();
 	}
 	alarm(delay);
+}
+
+int get_delay(const char* s) {
+	int ret = 0;
+	for(int i =0; i < strlen(s); i++) {
+		if(isdigit(s[i])) {
+			ret = ret * 10 + (s[i] - '0');
+		}
+	}
+	return ret;
 }
 
 void swap(proc *a, proc *b) {
@@ -316,7 +330,7 @@ void get_proc_stat(char* proc_stat_path, int index) { //proc/pid/stat에서 정�
 	struct stat statbuf; //process stat구조체
 	stat(proc_stat_path, &statbuf); //해당 stat 읽기
 	struct passwd *upasswd = getpwuid(statbuf.st_uid); //uid읽어오기수
-	
+
 	//username 읽기
 	for(int i = 0; i < MAX; i++) {
 		if(upasswd->pw_name[i] != '\0') {
@@ -497,6 +511,11 @@ void get_data() {//데이터를 읽어오는 함수
 	get_cpu_info();
 	get_procs();
 
+	if(ioctl(0, TIOCGWINSZ, (char*)&win) < 0) {
+		fprintf(stderr, "ioctl error\n");
+		exit(1);
+	}
+
 	memset(result, '\0', sizeof(result));
 	//head 저장
 	if(!uptime_line) {
@@ -507,8 +526,8 @@ void get_data() {//데이터를 읽어오는 함수
 	sprintf(result[print_row++], "MiB Mem :   %.1f total,   %.1f free,   %.1f used,   %.1f buff/cache", memtotal, memfree, memused, membuff_cache);
 	sprintf(result[print_row++], "MiB Swap:   %.1f total,   %.1f free,   %.1f used.   %.1f avail Mem", swaptotal, swapfree, swapused, swapavail_mem);
 	strcpy(result[print_row++], "");
-	sprintf(result[print_row++], "%7s %-8s %3s %3s %7s %6s %6s %c %4s %4s   %7s %s",
-			"PID", "USER", "PR", "NI", "VIRT", "RES", "SHR", 'S', "%CPU", "%MEM", "TIME+", "COMMAND");
+	snprintf(result[print_row++],win.ws_col, "%7s %-8s %3s %3s %7s %6s %6s %c %4s %4s   %7s %s%s",
+			"PID", "USER", "PR", "NI", "VIRT", "RES", "SHR", 'S', "%CPU", "%MEM", "TIME+", "COMMAND", blank);
 }
 
 bool ispid(int pid) { //출력해야하는 pid인지 판단
@@ -535,7 +554,6 @@ bool isuser(char* str) { //출력해야하는 user인지 판단
 
 void print_1() { //나열모드가 아닐 때 결과를 출력하는 함수
 	//터미널 크기 구하기
-	struct winsize win; 
 	if(ioctl(0, TIOCGWINSZ, (char*)&win) < 0) {
 		fprintf(stderr, "ioctl error\n");
 		exit(1);
@@ -587,13 +605,12 @@ void print_1() { //나열모드가 아닐 때 결과를 출력하는 함수
 void print_2() { //나열 모드 결과를 출력하는 함수
 	printf("\n");
 	//터미널 크기 구하기
-	struct winsize win; 
 	if(ioctl(0, TIOCGWINSZ, (char*)&win) < 0) {
 		fprintf(stderr, "ioctl error\n");
 		exit(1);
 	}
 
-	
+
 	char tm[8]; //TIME 문자열 저장함수
 	for(int i = start_row; i < tasks; i++) {
 		if(option_i && procs[i].CPU < 0.1) continue;
@@ -614,7 +631,7 @@ void print_2() { //나열 모드 결과를 출력하는 함수
 					procs[i].SHR, procs[i].S, procs[i].CPU, procs[i].MEM, tm, procs[i].COMMAND);
 		}
 	}
-	
+
 	//내용 출력
 	for(int i = 0; i < print_row; i++)
 		printf("%s\n", result[i]);
@@ -628,16 +645,15 @@ void operation_d() { //d옵션을 수행하는 함수
 	int c;
 	int chk = 0;
 	if(!uptime_line) { //uptime_line이 있는 경우
-		mvaddstr(5, 0, blank);
+		mvaddstr(5, 0, blank2);
 		mvaddstr(5, 0, "Change delay from 3.0 to "); 
 	}
 	else { //uptime_line이 없는 경우
-		mvaddstr(4, 0, blank);
+		mvaddstr(4, 0, blank2);
 		mvaddstr(4, 0, "Change delay from 3.0 to ");
 	}
-	while((c = getch()) != '\n') {	
+	while((c = getch()) != '\n') {
 		if(c == 8) { //backspace인 경우
-			idx--;
 			delch();
 			continue;
 		}
@@ -645,11 +661,12 @@ void operation_d() { //d옵션을 수행하는 함수
 			chk = 1;
 			break;
 		}
-		str[idx] = c;
-		idx++;
+		if(c != -1)
+			str[idx++] = c;
 	}
-	if(!chk) //esc를 누른 경우 취소
+	if(!chk) {//esc를 누른 경우 취소
 		delay = atoi(str);
+	}
 	alarm(3);
 	raise(SIGALRM);
 }
@@ -662,11 +679,11 @@ void operation_u() {
 	char c;
 	int chk = 0;
 	if(!uptime_line) { //uptime_line이 있는 경우
-		mvaddstr(5, 0, blank);
+		mvaddstr(5, 0, blank2);
 		mvaddstr(5, 0, "Which user (blank for all) "); 
 	}
 	else { //uptime_line이 없는 경우
-		mvaddstr(4, 0, blank);
+		mvaddstr(4, 0, blank2);
 		mvaddstr(4, 0, "Which user (blank for all) ");
 	}
 	char tmp[10];
@@ -680,7 +697,8 @@ void operation_u() {
 			chk = 1;
 			break;
 		}
-		str[idx++] = c;
+		if(c != -1)
+			str[idx++] = c;
 	}
 	if(!chk) { //esc를 누르지 않았을 때
 		strncpy(users, str, MAX); //출력하고자 하는 user에 복사
@@ -690,7 +708,7 @@ void operation_u() {
 		else
 			special_user = 1;
 	}
-	alarm(3);
+	alarm(delay);
 	raise(SIGALRM);
 
 }
@@ -710,11 +728,11 @@ void operation_k() { //k옵션을 수행하는 함수
 	memset(tmp, 0, MAX);
 	sprintf(tmp, "PID to signal/kill [default pid = %ld] ", procs[0].PID);
 	if(!uptime_line) { //uptime_line이 있는 경우
-		mvaddstr(5, 0, blank);
+		mvaddstr(5, 0, blank2);
 		mvaddstr(5, 0, tmp); //default는 가장 위에 있는 Process
 	}
 	else { //uptime_line이 없는 경우
-		mvaddstr(4, 0, blank);
+		mvaddstr(4, 0, blank2);
 		mvaddstr(4, 0, tmp);
 	}
 	while((c = getch()) != '\n') {
@@ -727,7 +745,8 @@ void operation_k() { //k옵션을 수행하는 함수
 			chk = 1;
 			break;
 		}
-		str[idx++] = c;
+		if(c != -1)
+			str[idx++] = c;
 	}
 	if(!chk) {//esc를 누르지 않은 경우
 		if(idx == 0) //아무것도 입력을 받지 않은 경우
@@ -738,11 +757,11 @@ void operation_k() { //k옵션을 수행하는 함수
 		memset(tmp, 0, MAX);
 		sprintf(tmp, "Send pid %d signal [15/sigterm] ", kill_pid);
 		if(!uptime_line) { //uptime_line이 있는 경우
-			mvaddstr(5, 0, blank);
+			mvaddstr(5, 0, blank2);
 			mvaddstr(5, 0, tmp);
 		}
 		else { //uptime_line이 없는 경우
-			mvaddstr(4, 0, blank);
+			mvaddstr(4, 0, blank2);
 			mvaddstr(4, 0, tmp);
 		}
 		idx = 0;
@@ -757,18 +776,22 @@ void operation_k() { //k옵션을 수행하는 함수
 				chk = 1;
 				break;
 			}
-			sig[idx++] = c;
+			if(c != -1)
+				sig[idx++] = c;
 		}
 		if(!chk) { //esc를 누르지 않은 경우
-			int signal = atoi(sig);
-			//printf("%s\n", sig);
-			//exit(0);
+			int signal = 0;
+			for(int i = 0; i < idx; i++) {
+				if(isdigit(sig[i])) {
+					signal = signal*10 + (sig[i] - '0');
+				}
+			}
 			if(signal == 9) {
 				kill(kill_pid, SIGKILL);
 			}
 		}
 	}
-	alarm(3);
+	alarm(delay);
 	raise(SIGALRM);
 }
 
@@ -797,9 +820,12 @@ int get_ch() {
 
 
 int main(int argc, char **argv) {
+	if(ioctl(0, TIOCGWINSZ, (char*)&win) < 0) {
+		fprintf(stderr, "ioctl error\n");
+		exit(1);
+	}
 
 	for(int i = 12; i < MAX; i++) begin[i] = begin[i-1] + 8;
-	memset(blank, ' ', 70);
 	//초기 옵션 설정
 	signal(SIGALRM, handler); //alarm 시그널에 동작할 handler함수를 설정
 	option = 'P';
@@ -812,6 +838,7 @@ int main(int argc, char **argv) {
 	option_b = 0;
 	special_user = 0;
 	kill_pid = 0;
+	memset(blank2, ' ', 70);
 
 	//실행 전 옵션 parsing
 	for(int i = 1; i < argc; i++) {
@@ -844,11 +871,18 @@ int main(int argc, char **argv) {
 		print_2();
 	}
 	print_cnt = 1;
+	alarm(delay);
 	//3초마다 갱신
 	while(1) {
+		if(ioctl(0, TIOCGWINSZ, (char*)&win) < 0) {
+			fprintf(stderr, "ioctl error\n");
+			exit(1);
+		}
+		memset(blank, ' ', win.ws_col);
+
+
 		if(print_max != -1 && print_max == print_cnt) break;
-		alarm(delay);
-		int input = get_ch();
+		int input = getch();
 		int sum = input;
 		if(input == 'q') { //종료
 			break;
@@ -865,7 +899,7 @@ int main(int argc, char **argv) {
 			option = 'T';
 			raise(SIGALRM);
 		}
-		
+
 		else if(input == 'l') { //uptime_line숨김/표시
 			if(uptime_line)
 				uptime_line = 0;
@@ -873,56 +907,51 @@ int main(int argc, char **argv) {
 				uptime_line = 1;
 			raise(SIGALRM);
 		}
-		
+
 		else if(input == ' ' || input == 27) { //space나 esc를 누를 경우 refresh
 			raise(SIGALRM);
 		}
-		
+
 		else if(input == 'c') { //명령 인자 표시/ 비표시
 			if(option_c) option_c = 0;
 			else option_c = 1;
 			raise(SIGALRM);
 		}
-		
+
 		else if(input == 'i') {
 			if(option_i) option_i = 0;
 			else option_i = 1;
 			raise(SIGALRM);
 		}
-		
+
 		else if(input == 'd') { //delay를 설정
 			operation_d();
 		}
-		
+
 		else if(input == 'u' || input == 'U') { //특정 user 설정
 			operation_u();
 		}
-		
+
 		else if(input == 'k') { //kill하려는 pid 출력
 			operation_k();
 		}
 		else { //방향키를 입력하는 경우
-			for(int i = 0; i < 2; i++) {
-				input = get_ch();
-				sum += input;
-			}
-			//printf("%d\n", sum);
-			if(sum == 171) {//위 방향키인 경우
+			if(sum == KEY_UP) {//위 방향키인 경우
 				start_row--;
 				if(start_row < 0) start_row = 0;
 				raise(SIGALRM);
 			}
-			else if(sum == 172) { //아래 방향키인 경우
+			else if(sum == KEY_DOWN) { //아래 방향키인 경우
 				start_row++;
 				if(start_row == tasks) start_row = tasks-1;
 				raise(SIGALRM);
 			}
-			else if(sum == 174) { //왼쪽 방향키인 경우
+			else if(sum == KEY_LEFT) { //왼쪽 방향키인 경우
 				start_col--;
 				if(start_col < 0) start_col = 0;
 				raise(SIGALRM);
 			}
-			else if(sum == 173) { //오른쪽 방향키인 경우
+			else if(sum == KEY_RIGHT) { //오른쪽 방향키인 경우
 				start_col++;
 				raise(SIGALRM);
 			}
