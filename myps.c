@@ -265,16 +265,28 @@ void get_tty(int index) {
 	memset(fdpath, '\0', MAX);
 	sprintf(fdpath, "/proc/%d/fd/0", procs[index].PID);
 
-	if(access(fdpath, F_OK) < 0){	//fd 0이 없을 경우
+	DIR *dp;
+	struct dirent *dentry;
+	if((dp = opendir("/dev")) == NULL){		// 터미널 찾기 위해 /dev 디렉터리 open
+		fprintf(stderr, "/dev directory open error\n");
+		exit(1);
+	}
+	char nowPath[MAX];
 
-		DIR *dp;
-		struct dirent *dentry;
-		if((dp = opendir("/dev")) == NULL){		// 터미널 찾기 위해 /dev 디렉터리 open
-			fprintf(stderr, "/dev directory open error\n");
+	if(access(fdpath, F_OK) == 0){
+		char symLinkName[MAX];
+		memset(symLinkName, 0, MAX);
+		if(readlink(fdpath, symLinkName, MAX) < 0){
+			fprintf(stderr, "readlink error for %s\n", fdpath);
 			exit(1);
 		}
-		char nowPath[MAX];
+		if(!strcmp(symLinkName, "/dev/null"))		//symbolic link로 가리키는 파일이 /dev/null일 경우
+			strcpy(procs[index].TTY, "?");					//nonTerminal
+		else
+			sscanf(symLinkName, "/dev/%s", procs[index].TTY);	//그 외의 경우 tty 획득
 
+	}
+	if(!strcmp(procs[index].TTY, "?")) {
 		while((dentry = readdir(dp)) != NULL){	// /dev 디렉터리 탐색
 			memset(nowPath, 0, MAX);	// 현재 탐색 중인 파일 절대 경로
 			sprintf(nowPath, "/dev/%s", dentry->d_name);
@@ -292,23 +304,9 @@ void get_tty(int index) {
 			}
 		}
 		closedir(dp);
-
-		if(!strlen(procs[index].TTY))					// /dev에서도 찾지 못한 경우
-			strcpy(procs[index].TTY, "?");				//nonTerminal
 	}
-	else{
-		char symLinkName[MAX];
-		memset(symLinkName, 0, MAX);
-		if(readlink(fdpath, symLinkName, MAX) < 0){
-			fprintf(stderr, "readlink error for %s\n", fdpath);
-			exit(1);
-		}
-		if(!strcmp(symLinkName, "/dev/null"))		//symbolic link로 가리키는 파일이 /dev/null일 경우
-			strcpy(procs[index].TTY, "?");					//nonTerminal
-		else
-			sscanf(symLinkName, "/dev/%s", procs[index].TTY);	//그 외의 경우 tty 획득
-
-	}
+	if(!strlen(procs[index].TTY))					// 어디에서도 찾지 못한 경우
+		strcpy(procs[index].TTY, "?");				//nonTerminal
 
 	if(procs[index].PID == mypid)
 		strcpy(mytty, procs[index].TTY);
@@ -510,8 +508,8 @@ void get_procs() { //pid를 확인하고 process 정보들을 가져오는 함�
 		if(access(status_path, F_OK) == 0) {
 			get_proc_cmdline(cmdline_path, i);
 		}
-		get_tty(i);
 		if(option.e) get_environ(i);
+		get_tty(i);
 	}
 
 	closedir(proc_dir);
@@ -577,7 +575,7 @@ void print_data() { //데이터들을 불러오는 함수
 		if(option.r) { //현재 running중인 프로세스만 표시
 			if(procs[index].STAT[0] != 'R') continue;
 		}
-		
+
 		if(option.a) {
 			if(option.u) {
 				if(!option.x) {
@@ -655,24 +653,24 @@ void print_data() { //데이터들을 불러오는 함수
 		/*
 		   if((option.bar && option.f))
 		   printf("  C");
-		 
-		if(!option.u &&(option.bar && option.f)) {
-			struct tm *t;
-			char starttime[MAX];
-			memset(starttime, 0, MAX);
-			t = localtime(&procs[index].START);
-			if(time(NULL) - procs[index].START < 24 * 3600) {
-				strftime(starttime, 5, "%2H:%02M", t);
-			}
-			else if(time(NULL) - procs[index].START < 7 * 24 * 3600) {
-				strftime(starttime, 5, "%b %d", t);
-			}
-			else {
-				strftime(starttime, 5, "%y", t);
-			}
-			printf(" %s", starttime);
-			strlen += 6;
-		}
+
+		   if(!option.u &&(option.bar && option.f)) {
+		   struct tm *t;
+		   char starttime[MAX];
+		   memset(starttime, 0, MAX);
+		   t = localtime(&procs[index].START);
+		   if(time(NULL) - procs[index].START < 24 * 3600) {
+		   strftime(starttime, 5, "%2H:%02M", t);
+		   }
+		   else if(time(NULL) - procs[index].START < 7 * 24 * 3600) {
+		   strftime(starttime, 5, "%b %d", t);
+		   }
+		   else {
+		   strftime(starttime, 5, "%y", t);
+		   }
+		   printf(" %s", starttime);
+		   strlen += 6;
+		   }
 		   if(option.l)
 		   printf(" PRI");
 		   if(option.l)
