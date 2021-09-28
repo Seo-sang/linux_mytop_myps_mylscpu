@@ -6,6 +6,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <stdbool.h>
+#include <sys/utsname.h>
 #include <ctype.h>
 #include <sys/types.h>
 #include <sys/sysmacros.h>
@@ -66,7 +67,7 @@ cache L1d_C, L1i_C, L2_C, L3_C; //C옵션을 추가할 경우
 bool op_64, op_32, op_16;
 int core; //cpu 코어 개수
 int siblings; //thread per core를 구하기 위한 값
-
+int processor; //processor 개수
 int get_value(const char* str) { //string으로부터 정수값 얻기
 	int ret = 0;
 	for(int i = 0; i < strlen(str); i++) {
@@ -107,31 +108,34 @@ void get_cpuinfo() { //proc/cpuinfo에서 정보를 얻는 함수
 	char parse[MID][LONG]; //파싱정보 저장
 	memset(parse_tmp, 0, 10000);
 	memset(parse, 0, sizeof(parse));
-
+	int i = 0;
+	char *ptr;
 	int fd;//file descriptor
 	if(access(path, F_OK)) return;
 	if((fd = open(path, O_RDONLY)) < 0) {
 		fprintf(stderr, "%s file open error\n", path);
 		exit(1);
 	}
-	if(read(fd, parse_tmp, 10000) == 0) {
-		fprintf(stderr, "%s file read error\n", path);
-		exit(1);
+	while(true) {
+		memset(parse_tmp, 0, sizeof(parse_tmp));
+		if(read(fd, parse_tmp, 10000) == 0) {
+			break;
+		}
+		//읽어온 정보 개행단위로 파싱하기
+		ptr = strtok(parse_tmp, "\n");
+		while(ptr != NULL) {
+			strcpy(parse[i++], ptr);
+			ptr = strtok(NULL, "\n");
+		}
 	}
 	close(fd);
-
-	int i = 0;
-	//읽어온 정보 개행단위로 파싱하기
-	char *ptr = strtok(parse_tmp, "\n");
-	while(ptr != NULL) {
-		strcpy(parse[i++], ptr);
-		ptr = strtok(NULL, "\n");
-	}
-
 	i = 0;
 	int idx = 0;
 	for(int i = 0; i < MID; i++) {
-		if(!strncmp(parse[i], "address sizes", 13)) {
+		if(!strncmp(parse[i], "processor", 9)) {
+			processor += 1;
+		}
+		else if(!strncmp(parse[i], "address sizes", 13)) {
 			if(strlen(address_size) == 0) {
 				strcpy(address_size, parse[i] + start_point(parse[i]));
 			}
@@ -229,7 +233,6 @@ void get_cpuinfo() { //proc/cpuinfo에서 정보를 얻는 함수
 			}
 		}
 	}
-
 	//thread-per-core구하기
 	thread_per_core = siblings / core;
 }
@@ -495,7 +498,7 @@ void get_cache() {
 		}
 		close(fd);
 		rst = get_value(tmp); //크기를 숫자로 바꾼다
-		
+
 		if(rst < 1024)
 			sprintf(L1i_C.one_size, "%dK", rst);
 		else if(rst < 1024*1024)
@@ -569,7 +572,7 @@ void get_cache() {
 		}
 		close(fd);
 		rst = get_value(tmp); //크기에 core를 곱한다.
-		
+
 		if(rst < 1024)
 			sprintf(L2_C.one_size, "%dK", rst);
 		else if(rst < 1024*1024)
@@ -645,7 +648,7 @@ void get_cache() {
 		}
 		close(fd);
 		rst = get_value(tmp); //크기에 core를 곱한다.
-	
+
 		if(rst < 1024)
 			sprintf(L3_C.one_size, "%dK", rst);
 		else if(rst < 1024*1024)
@@ -727,31 +730,47 @@ void get_online() {
 void get_Mhz() {
 	char *maxpath = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq";
 	char *minpath = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq";
-
+	char tmp[SHORT];
+	memset(tmp, 0, SHORT);
 	int fd;
 	if(access(maxpath, F_OK) == 0) {
 		if((fd = open(maxpath, O_RDONLY)) < 0) {
 			fprintf(stderr, "%s file open error\n", maxpath);
 			exit(1);
 		}
-		if(read(fd, max_mhz, SHORT) == 0) {
+		if(read(fd, tmp, SHORT) == 0) {
 			fprintf(stderr, "%s file open error\n", maxpath);
 			exit(1);
 		}
 		close(fd);
 	}
+	int len = strlen(tmp);
+	int index = 0;
+	for(int i = 0; i < len; i++) {
+		max_mhz[index++] = tmp[i];
+		if(i == len-5) max_mhz[index++] = '.';
+	}
 
+	memset(tmp, 0, SHORT);
 	if(access(minpath, F_OK) == 0) {
 		if((fd = open(minpath, O_RDONLY)) < 0) {
 			fprintf(stderr, "%s file open error\n", minpath);
 			exit(1);
 		}
-		if(read(fd, min_mhz, SHORT) == 0) {
+		if(read(fd, tmp, SHORT) == 0) {
 			fprintf(stderr, "%s file open error\n", minpath);
 			exit(1);
 		}
 		close(fd);
 	}
+
+	len = strlen(tmp);
+	index = 0;
+	for(int i = 0; i < len; i++) {
+		min_mhz[index++] = tmp[i];
+		if(i == len-5) min_mhz[index++] = '.';
+	}
+
 }
 
 //NUMA node 정보 얻기
@@ -790,22 +809,9 @@ void get_NUMA() {
 
 //Architecture 얻기
 void get_arch() {
-	DIR *dir;
-	struct dirent *dp;
-	if(access("/lib", F_OK)) return;
-	if((dir = opendir("/lib")) == NULL) {
-		fprintf(stderr, "/lib directory open error\n");
-		exit(1);
-	}
-
-	while((dp = readdir(dir)) != NULL) {
-		int len = strlen(dp->d_name); //파일 이름 길이
-		for(int i = 0; i <= len - 10; i++) {
-			if(!strcmp(dp->d_name + i, "-linux-gnu")) {
-				strncpy(architecture, dp->d_name, len - 10);
-			}
-		}
-	}
+	struct utsname u;
+	uname(&u);
+	strcpy(architecture, u.machine);
 }
 
 //byte order 얻기
@@ -853,7 +859,6 @@ void print() {
 		printf("%-33s", "On-line CPU(s) list:");
 		printf("%s\n", online_cpu);
 	}
-
 	printf("%-33s", "Thread(s) per core:");
 	printf("%d\n", thread_per_core);
 
@@ -933,7 +938,6 @@ void print() {
 		printf("%-33s", "L3 cache:");
 		printf("%s\n", L3);
 	}
-
 	for(int i = 0; i < NUMA_node; i++) {
 		char tmp[SHORT];
 		memset(tmp, 0, SHORT);
@@ -1164,8 +1168,6 @@ void print2() {
 }
 
 int main(int argc, char **argv) {
-	socket = 1;
-
 	get_cpuinfo();
 	get_vulnerability();
 	get_cpus();
@@ -1175,8 +1177,8 @@ int main(int argc, char **argv) {
 	get_NUMA();
 	get_arch();
 	get_byte_order();
+	socket = processor / siblings;
 	core_per_socket = core / socket;
-
 	//뒤에 개행 지우기
 	delete_n(architecture);
 	delete_n(op_mode);
@@ -1281,7 +1283,6 @@ int main(int argc, char **argv) {
 	delete_blank(L3_C.ways);
 	delete_blank(L3_C.type);
 	delete_blank(L3_C.level);
-
 
 
 	if(argc == 1)
