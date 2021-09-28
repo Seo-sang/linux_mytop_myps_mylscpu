@@ -56,8 +56,8 @@ typedef struct {
 	ll RSS; //*
 	char TTY[MAX]; //*
 	char STAT[MAX]; //*
-	unsigned long START; //*
-	unsigned long TIME; //*
+	time_t START; //*
+	time_t TIME; //*
 	char COMMAND[MAX]; //*
 	char CMD[MAX]; //*
 	int ttyNr; //*
@@ -510,6 +510,7 @@ void get_procs() { //pid를 확인하고 process 정보들을 가져오는 함�
 		}
 		if(option.e) get_environ(i);
 		get_tty(i);
+
 	}
 
 	closedir(proc_dir);
@@ -570,7 +571,6 @@ void print_data() { //데이터들을 불러오는 함수
 	int strlen; //string 길이
 	for(int index = 0; index < tasks; index++) {
 		strlen = 0;
-
 		//process 거르기
 		if(option.r) { //현재 running중인 프로세스만 표시
 			if(procs[index].STAT[0] != 'R') continue;
@@ -634,7 +634,6 @@ void print_data() { //데이터들을 불러오는 함수
 				}
 			}
 		}
-
 		//출력 정보 거르기
 		if(!(option.bar && option.f) && option.u) {
 			printf("%-8s", procs[index].USER);
@@ -650,32 +649,7 @@ void print_data() { //데이터들을 불러오는 함수
 			printf(" %6d", procs[index].PPID);
 			strlen += 7;
 		}
-		/*
-		   if((option.bar && option.f))
-		   printf("  C");
 
-		   if(!option.u &&(option.bar && option.f)) {
-		   struct tm *t;
-		   char starttime[MAX];
-		   memset(starttime, 0, MAX);
-		   t = localtime(&procs[index].START);
-		   if(time(NULL) - procs[index].START < 24 * 3600) {
-		   strftime(starttime, 5, "%2H:%02M", t);
-		   }
-		   else if(time(NULL) - procs[index].START < 7 * 24 * 3600) {
-		   strftime(starttime, 5, "%b %d", t);
-		   }
-		   else {
-		   strftime(starttime, 5, "%y", t);
-		   }
-		   printf(" %s", starttime);
-		   strlen += 6;
-		   }
-		   if(option.l)
-		   printf(" PRI");
-		   if(option.l)
-		   printf("  NI");
-		 */
 		if(option.u) {
 			printf(" %4.1f", procs[index].CPU);
 			strlen += 5;
@@ -692,14 +666,7 @@ void print_data() { //데이터들을 불러오는 함수
 			printf(" %5lld", procs[index].RSS);
 			strlen += 8;
 		}
-		/*
-		   if((option.l && option.bar))
-		   printf(" ADDR");
-		   if((option.l && option.bar))
-		   printf(" SZ");
-		   if(option.l)
-		   printf(" WCHAN");
-		 */
+
 		printf(" %-7s", procs[index].TTY);
 		strlen += 10;
 		if(option.a ||option.u || option.r || option.x || option.f || option.p) {
@@ -710,6 +677,7 @@ void print_data() { //데이터들을 불러오는 함수
 			struct tm *t;
 			char starttime[16];
 			memset(starttime, 0, 16);
+			
 			t = localtime(&procs[index].START);
 			if(time(NULL) - procs[index].START < 24 * 3600) {
 				strftime(starttime, 16, "%H:%M", t);
@@ -720,11 +688,13 @@ void print_data() { //데이터들을 불러오는 함수
 			else {
 				strftime(starttime, 16, "%y", t);
 			}
+
 			printf(" %s", starttime);
 			strlen += 6;
 
 		}
-		struct tm *T = localtime(&procs[index].TIME);
+		struct tm *T = NULL;
+		T = localtime(&procs[index].TIME);
 		if(option.bar || option.no) {
 			if(procs[index].TIME == 0)
 				printf("  00:00:00");
